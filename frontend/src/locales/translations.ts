@@ -53,7 +53,9 @@ export const zh = {
       ai_tutor: "AstraMentor AI",
       thinking: "AI 正在思考...",
       start_lesson: "开始上课",
-      select_node: "请先选择一个知识点开始学习"
+      select_node: "请先选择一个知识点开始学习",
+      waiting_for_topic: "等待生成主题",
+      select_node_prompt: "请先生成知识星图并选择一个节点开始学习。"
   },
   node_modal: {
       success: "知识点已更新",
@@ -87,7 +89,9 @@ export const en = {
       ai_tutor: "AstraMentor AI",
       thinking: "AI is thinking...",
       start_lesson: "Start Lesson",
-      select_node: "Select a node to start learning"
+      select_node: "Select a node to start learning",
+      waiting_for_topic: "Waiting for Topic",
+      select_node_prompt: "Please generate a Knowledge Graph and select a node to start learning."
   },
   app: {
     title: "AstraMentor",

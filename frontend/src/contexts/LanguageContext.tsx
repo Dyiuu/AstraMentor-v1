@@ -10,7 +10,7 @@ interface LanguageContextType {
   t: (key: string, params?: Record<string, string>) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined as LanguageContextType | undefined);
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguage] = useState<Language>('zh');

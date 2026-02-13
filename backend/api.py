@@ -6,16 +6,24 @@ from backend.models import (
     ChatRequest,
     EvaluateRequest,
     TeachingContentResponse,
-    TeachingContentResponse,
     EvaluationResponse,
-    UpdateNodeRequest
+    UpdateNodeRequest,
+    RunCodeRequest,
+    RunCodeResponse
 )
+
+from services.code_runner import CodeRunner
 
 router = APIRouter()
 
 # Dependency to get LearningService
 def get_service():
     return LearningService()
+
+@router.post("/run-code", response_model=RunCodeResponse)
+async def run_code(request: RunCodeRequest):
+    result = CodeRunner.run_code(request.language, request.code)
+    return RunCodeResponse(**result)
 
 @router.post("/graph/generate")
 async def generate_graph(request: GenerateGraphRequest, service: LearningService = Depends(get_service)):

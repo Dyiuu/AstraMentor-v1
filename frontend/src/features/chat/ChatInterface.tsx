@@ -80,16 +80,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  if (!currentNodeName) {
+      return (
+          <Card className="flex flex-col h-full shadow-md rounded-lg overflow-hidden border-border bg-card">
+              <CardHeader className="border-b bg-muted/40 py-3">
+                  <CardTitle className="flex items-center gap-2 text-base font-medium">
+                      <BookOpen className="w-5 h-5 text-primary" />
+                      {t('chat.ai_tutor')}
+                  </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col items-center justify-center p-6 text-center text-muted-foreground bg-slate-50/50">
+                  <div className="bg-slate-100 p-4 rounded-full mb-4">
+                        <BookOpen className="w-8 h-8 text-slate-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                      {t('chat.waiting_for_topic')}
+                  </h3>
+                  <p className="max-w-xs text-sm">
+                      {t('chat.select_node_prompt')}
+                  </p>
+              </CardContent>
+          </Card>
+      );
+  }
+
   return (
     <Card className="flex flex-col h-full shadow-md rounded-lg overflow-hidden border-border bg-card">
       <CardHeader className="border-b bg-muted/40 py-3">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <BookOpen className="w-5 h-5 text-primary" />
-          {currentNodeName ? t('chat.learning', {node: currentNodeName}) : t('chat.ai_tutor')}
+          {t('chat.learning', {node: currentNodeName}) }
         </CardTitle>
       </CardHeader>
+      
+      {/* Rest of the chat interface... */}
       <CardContent className="flex-1 overflow-hidden p-0 bg-background relative">
         <ScrollArea className="h-full p-4">
+        {/* ... existing code ... */}
           <div className="flex flex-col gap-4 pb-4">
             {messages.map((msg, index) => (
               <div

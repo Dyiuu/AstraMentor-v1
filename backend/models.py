@@ -40,3 +40,12 @@ class EvaluationResponse(BaseModel):
     analysis: str
     is_mastered: bool
     new_mastery: float
+
+class RunCodeRequest(BaseModel):
+    code: str
+    language: str
+
+class RunCodeResponse(BaseModel):
+    output: str
+    error: str
+    exit_code: int

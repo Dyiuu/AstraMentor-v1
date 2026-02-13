@@ -10,19 +10,11 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ChatInterface from './features/chat/ChatInterface';
 import Dashboard from './features/dashboard/Dashboard';
-import { Input } from './components/ui/input';
+import HomePage from './features/home/HomePage';
 import { Button } from './components/ui/button';
-import { Search, Loader2, Book, Menu, Sun, Eye, Languages } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "./components/ui/dialog"
-import { Label } from "./components/ui/label"
+import { Search, Loader2, Book, Menu, Sun, Eye, Languages, Code } from 'lucide-react';
+import { IDEPanel } from './features/ide/IDEPanel';
+import { GenerateGraphDialog } from './features/graph/GenerateGraphDialog';
 import { ScrollArea } from './components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable"
@@ -34,9 +26,7 @@ interface NodeSessionState {
   chatMessages: ChatMessage[];
   teachingPlan: string | null;
   isPlanView: boolean;
-  showPlanPanel: boolean; // Optional: persist panel visibility too? Maybe overkill, but let's stick to content first. User asked for "dialogue lost".
-  // Actually, panel visibility should probably be global or per-node? User likely wants specific layout per node? 
-  // Probably global is better for layout, but chat/plan content is per-node.
+  showPlanPanel: boolean; 
 }
 
 interface FullGraphSession extends GraphSession {
@@ -72,6 +62,8 @@ function App() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [contextMenuNode, setContextMenuNode] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [showLanding, setShowLanding] = useState(!graphData); // Show landing if no graph active
+
  
   // UI States for Learning Flow
   const [isPlanView, setIsPlanView] = useState(false); // True when showing plan confirmation button
@@ -80,6 +72,7 @@ function App() {
   // Panel Visibility States
   const [showPlanPanel, setShowPlanPanel] = useState(true);
   const [showGraphPanel, setShowGraphPanel] = useState(true);
+  const [showIDE, setShowIDE] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   
   // Theme State
@@ -94,8 +87,6 @@ function App() {
     if (theme === 'eye-care') {
       root.classList.add('eye-care');
     }
-    // Light is default (no class or removal of others)
-    // Light is default
   }, [theme]);
 
   // History Sessions
@@ -149,9 +140,6 @@ function App() {
   const handleGenerateGraph = async () => {
     if (!inputTopic.trim()) return;
 
-    // Save previous session before generating new one
-    // Only if we stick to "switch" model. 
-    // Actually, "Generating" usually implies creating a NEW session.
     if (graphData) {
         saveCurrentSession();
     }
@@ -193,6 +181,9 @@ function App() {
       };
       setGraphSessions(prev => [newSession, ...prev]);
 
+      // Switch to main view
+      setShowLanding(false);
+
       toast.success('Knowledge Graph Generated!');
     } catch (error) {
       toast.error('Failed to generate graph');
@@ -227,6 +218,7 @@ function App() {
       setChatMessages([]);
       setTeachingPlan(null);
       setIsPlanView(false);
+      setShowLanding(false); // Switch to main view
       
       // Close sidebar on mobile? optional.
   };
@@ -254,6 +246,8 @@ function App() {
           toast.success('已删除历史记录');
       }
   };
+
+
 
   const handleNodeClick = (nodeId: string, nodeName: string, attributes: any) => {
     // 1. Save current session state if a node is selected
@@ -451,7 +445,7 @@ ${evaluation.analysis}
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground relative">
+    <div className={showLanding ? "bg-background min-h-screen" : "flex flex-col h-screen bg-background text-foreground relative"}>
        {/* Node Details Modal */ }
        <NodeDetailsModal 
           node={contextMenuNode} 
@@ -462,279 +456,251 @@ ${evaluation.analysis}
           }}
        />
 
-      <header className="border-b p-4 flex items-center justify-between bg-background z-10 relative">
-        <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setShowHistory(!showHistory)} className="mr-1">
-                <Menu className="h-6 w-6" />
-            </Button>
-            
-            <div className="flex items-center gap-4">
-                <img src="/logo.png" alt="AstraMentor Logo" className="w-12 h-12 object-contain" />
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
-                  AstraMentor
-                </h1>
-            </div>
-            
-            {/* Panel Toggles */}
-            <div className="flex items-center gap-2 ml-4">
-                <Button 
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-                    className="text-muted-foreground hover:text-foreground"
-                    title={language === 'zh' ? "Switch to English" : "切换到中文"}
-                >
-                    <Languages className="h-4 w-4" />
-                </Button>
-
-                <Button 
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setTheme(theme === 'light' ? 'eye-care' : 'light')}
-                    className={theme === 'eye-care' ? "bg-amber-100 text-amber-900 border-amber-200 hover:bg-amber-200" : "text-muted-foreground hover:text-foreground"}
-                    title={theme === 'light' ? "开启护眼模式" : "切换回白天模式"}
-                >
-                    {theme === 'light' ? <Eye className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                </Button>
-
-                {teachingPlan && !isPlanView && (
-                    <Button 
-                        variant={showPlanPanel ? "default" : "outline"} 
-                        size="sm"
-                        onClick={() => setShowPlanPanel(!showPlanPanel)}
-                        className={showPlanPanel ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200" : "text-muted-foreground"}
-                    >
-                        <Book className="mr-2 h-4 w-4" />
-                        {showPlanPanel ? t('app.hide_plan') : t('app.view_plan')}
+       {showLanding ? (
+           <HomePage onStart={() => setShowLanding(false)} />
+       ) : (
+           <>
+              <header className="border-b p-4 flex items-center justify-between bg-background z-10 relative">
+                  <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => setShowHistory(!showHistory)} className="mr-1">
+                        <Menu className="h-6 w-6" />
                     </Button>
-                )}
-                
-                <Button 
-                    variant={showGraphPanel ? "default" : "outline"}
-                    size="sm" 
-                    onClick={() => setShowGraphPanel(!showGraphPanel)}
-                    className={showGraphPanel ? "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200" : "text-muted-foreground"}
-                >
-                    <Search className="mr-2 h-4 w-4" />
-                    {showGraphPanel ? t('app.hide_graph') : t('app.view_graph')}
-                </Button>
-            </div>
-        </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
-              <Search className="mr-2 h-4 w-4" />
-              {t('app.generate_btn')}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-          {/* ... Dialog content ... */}
-            <DialogHeader>
-              <DialogTitle>{t('app.dialog_title')}</DialogTitle>
-              <DialogDescription>
-                {t('app.dialog_desc')}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-6 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="topic" className="text-right">
-                  {t('app.topic_label')}
-                </Label>
-                <Input
-                  id="topic"
-                  placeholder={t('app.input_placeholder')}
-                  value={inputTopic}
-                  onChange={(e) => setInputTopic(e.target.value)}
-                  className="col-span-3"
-                  disabled={isGenerating}
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="level" className="text-right">
-                  {t('app.level_label')}
-                </Label>
-                <Input
-                  id="level"
-                  placeholder={t('app.level_placeholder')}
-                  value={inputLevel}
-                  onChange={(e) => setInputLevel(e.target.value)}
-                  className="col-span-3"
-                  disabled={isGenerating}
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="goal" className="text-right">
-                  {t('app.goal_label')}
-                </Label>
-                <Input
-                  id="goal"
-                  placeholder={t('app.goal_placeholder')}
-                  value={inputGoal}
-                  onChange={(e) => setInputGoal(e.target.value)}
-                  className="col-span-3"
-                  disabled={isGenerating}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleGenerateGraph} disabled={isGenerating || !inputTopic} className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700">
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t('app.generating_graph')}
-                  </>
-                ) : (
-                  t('app.start_generate')
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </header>
-
-      <main className="flex-1 flex overflow-hidden">
-        {/* History Sidebar */}
-        <HistorySidebar 
-            isOpen={showHistory} 
-            sessions={graphSessions} 
-            currentSessionId={currentSessionId}
-            onSelectSession={handleLoadSession}
-            onDeleteSession={handleDeleteSession}
-            onClose={() => setShowHistory(false)}
-        />
-
-        <div className="flex-1 flex overflow-hidden">
-            <ResizablePanelGroup orientation="horizontal">
-                
-                {/* Left Panel: Teaching Plan (Visible only if confirmed, plan exists, AND toggle is ON) */}
-                {/* We want it to be resizable. If not visible, we don't render the panel OR the handle? 
-                    Actually, better to conditionally render within the group. */}
-                {/* Left Panel: Teaching Plan (Visible only if confirmed, plan exists, AND toggle is ON) */}
-                {!isPlanView && teachingPlan && showPlanPanel && (
-                    <>
-                        <ResizablePanel defaultSize="25" minSize="10" maxSize="80" className="bg-muted/30 flex flex-col">
-                            <div className="h-full p-4 flex flex-col gap-4 animate-in slide-in-from-left-5 duration-300">
-                                <Card className="h-full flex flex-col border-border bg-card/60 shadow-sm">
-                                    <CardHeader className="py-3 px-4 border-b bg-muted/20">
-                                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-primary">
-                                            <Book className="w-4 h-4" />
-                                            {t('app.current_plan')}
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-0 flex-1 overflow-hidden">
-                                        <ScrollArea className="h-full p-4">
-                                            <div className="text-sm text-foreground leading-relaxed">
-                                                <ReactMarkdown 
-                                                    remarkPlugins={[remarkGfm]}
-                                                    components={{
-                                                        ul: ({node, ...props}) => <ul className="list-disc pl-8 my-2" {...props} />,
-                                                        ol: ({node, ...props}) => <ol className="list-decimal pl-8 my-2" {...props} />,
-                                                        h1: ({node, ...props}) => <h1 className="text-xl font-bold my-2" {...props} />,
-                                                        h2: ({node, ...props}) => <h2 className="text-lg font-bold my-2" {...props} />,
-                                                        h3: ({node, ...props}) => <h3 className="text-base font-bold my-1" {...props} />,
-                                                        a: ({node, ...props}) => <a className="text-blue-500 hover:underline" {...props} />,
-                                                        blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 italic my-2" {...props} />,
-                                                        code: ({node, inline, className, children, ...props}: any) => {
-                                                            const match = /language-(\w+)/.exec(className || '');
-                                                            return !inline && match ? (
-                                                                <SyntaxHighlighter
-                                                                    {...props}
-                                                                    style={vscDarkPlus}
-                                                                    language={match[1]}
-                                                                    PreTag="div"
-                                                                >
-                                                                    {String(children).replace(/\n$/, '')}
-                                                                </SyntaxHighlighter>
-                                                            ) : (
-                                                                <code className="bg-muted px-1 rounded font-mono text-xs" {...props}>
-                                                                    {children}
-                                                                </code>
-                                                            );
-                                                        },
-                                                    }}
-                                                >
-                                                    {teachingPlan}
-                                                </ReactMarkdown>
-                                            </div>
-                                        </ScrollArea>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </ResizablePanel>
-                        <ResizableHandle withHandle />
-                    </>
-                )}
-
-                {/* Middle Panel: Chat Interface */}
-                <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "35" : "40"} minSize="10" className="bg-muted/30 flex flex-col">
-                    <div className="h-full p-4 flex flex-col gap-4">
-                        <div className="flex-1 min-h-0">
-                            {selectedNode && chatMessages.length === 0 && !teachingPlan ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-6 bg-card rounded-lg border shadow-sm">
-                                    <h3 className="text-lg font-semibold">{t('app.confirm_learning', { topic: selectedNode.name })}</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                    {t('app.start_learning_desc')}
-                                    </p>
-                                    <Button onClick={handleStartLearning} disabled={isChatLoading}>
-                                    {isChatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    {t('app.start_learning_btn')}
-                                    </Button>
-                                </div>
-                            ) : (
-                                <ChatInterface 
-                                    messages={chatMessages} 
-                                    onSendMessage={handleSendMessage}
-                                    currentNodeName={selectedNode?.name || null}
-                                    isLoading={isChatLoading}
-                                    showStartLesson={isPlanView}
-                                    onStartLesson={handleConfirmStartLesson}
-                                    interactionState={interactionState}
-                                    onStartQuiz={handleStartQuiz}
-                                    onExplainAgain={handleExplainAgain}
-                                />
-                            )}
-                        </div>
+                    
+                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => setShowLanding(true)} title="Back to Home">
+                        <img src="/logo.png" alt="AstraMentor Logo" className="w-12 h-12 object-contain" />
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+                          AstraMentor
+                        </h1>
                     </div>
-                </ResizablePanel>
-                
-                {/* Right Panel: Graph (Visible only if toggle is ON) */}
-                {showGraphPanel && (
-                    <>
-                        <ResizableHandle withHandle />
-                        <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "40" : "60"} minSize="10">
-                            <div className="h-full relative bg-background">
-                            <KnowledgeGraph 
-                                data={graphData} 
-                                onNodeClick={handleNodeClick} 
-                                onNodeContextMenu={handleNodeContextMenu}
-                                theme={theme}
-                            />
-                            <div className="absolute top-4 left-4 z-10 w-auto">
-                                <Dashboard state={learnerState} graphData={graphData} />
-                            </div>
-                            {!graphData && !isGenerating && (
-                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                                {t('graph.enter_topic')}
-                                </div>
-                            )}
-                            {isGenerating && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-50">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                                        <p>{t('graph.generating')}</p>
+                    
+                    {/* Panel Toggles */}
+                    <div className="flex items-center gap-2 ml-4">
+                        <Button 
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
+                            className="text-muted-foreground hover:text-foreground"
+                            title={language === 'zh' ? "Switch to English" : "切换到中文"}
+                        >
+                            <Languages className="h-4 w-4" />
+                        </Button>
+
+                        <Button 
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setTheme(theme === 'light' ? 'eye-care' : 'light')}
+                            className={theme === 'eye-care' ? "bg-amber-100 text-amber-900 border-amber-200 hover:bg-amber-200" : "text-muted-foreground hover:text-foreground"}
+                            title={theme === 'light' ? "开启护眼模式" : "切换回白天模式"}
+                        >
+                            {theme === 'light' ? <Eye className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                        </Button>
+
+                        {teachingPlan && !isPlanView && (
+                            <Button 
+                                variant={showPlanPanel ? "default" : "outline"} 
+                                size="sm"
+                                onClick={() => setShowPlanPanel(!showPlanPanel)}
+                                className={showPlanPanel ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200" : "text-muted-foreground"}
+                            >
+                                <Book className="mr-2 h-4 w-4" />
+                                {showPlanPanel ? t('app.hide_plan') : t('app.view_plan')}
+                            </Button>
+                        )}
+                        
+                        <Button 
+                            variant={showIDE ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                                setShowIDE(!showIDE);
+                                if (!showIDE) setShowGraphPanel(false); // Auto-hide graph when opening IDE? Or just overlay?
+                                // Let's just let them toggle independently, but IDE takes precedence in view or replaces it.
+                                // If I use the same panel, I should probably toggle the other one off or just let the render logic handle it.
+                                // Let's keep it simple: IDE button toggles IDE mode.
+                            }}
+                            className={showIDE ? "bg-green-100 text-green-700 hover:bg-green-200 border-green-200" : "text-muted-foreground"}
+                            title="Open Code Editor"
+                        >
+                            <Code className="mr-2 h-4 w-4" />
+                            IDE
+                        </Button>
+
+                        <Button 
+                            variant={showGraphPanel ? "default" : "outline"}
+                            size="sm" 
+                            onClick={() => {
+                                setShowGraphPanel(!showGraphPanel);
+                                if (!showGraphPanel) setShowIDE(false); // Switch back to graph
+                            }}
+                            className={showGraphPanel ? "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200" : "text-muted-foreground"}
+                        >
+                            <Search className="mr-2 h-4 w-4" />
+                            {showGraphPanel ? t('app.hide_graph') : t('app.view_graph')}
+                        </Button>
+                    </div>
+                </div>
+
+                <Button onClick={() => setIsDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+                    <Search className="mr-2 h-4 w-4" />
+                    {t('app.generate_btn')}
+                </Button>
+              </header>
+
+              <main className="flex-1 flex overflow-hidden">
+                {/* History Sidebar */}
+                <HistorySidebar 
+                    isOpen={showHistory} 
+                    sessions={graphSessions} 
+                    currentSessionId={currentSessionId}
+                    onSelectSession={handleLoadSession}
+                    onDeleteSession={handleDeleteSession}
+                    onClose={() => setShowHistory(false)}
+                />
+
+                <div className="flex-1 flex overflow-hidden">
+                    <ResizablePanelGroup orientation="horizontal">
+                        
+                        {!isPlanView && teachingPlan && showPlanPanel && (
+                            <>
+                                <ResizablePanel defaultSize="25" minSize="10" maxSize="80" className="bg-muted/30 flex flex-col">
+                                    <div className="h-full p-4 flex flex-col gap-4 animate-in slide-in-from-left-5 duration-300">
+                                        <Card className="h-full flex flex-col border-border bg-card/60 shadow-sm">
+                                            <CardHeader className="py-3 px-4 border-b bg-muted/20">
+                                                <CardTitle className="text-sm font-medium flex items-center gap-2 text-primary">
+                                                    <Book className="w-4 h-4" />
+                                                    {t('app.current_plan')}
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="p-0 flex-1 overflow-hidden">
+                                                <ScrollArea className="h-full p-4">
+                                                    <div className="text-sm text-foreground leading-relaxed">
+                                                        <ReactMarkdown 
+                                                            remarkPlugins={[remarkGfm]}
+                                                            components={{
+                                                                ul: ({node, ...props}) => <ul className="list-disc pl-8 my-2" {...props} />,
+                                                                ol: ({node, ...props}) => <ol className="list-decimal pl-8 my-2" {...props} />,
+                                                                h1: ({node, ...props}) => <h1 className="text-xl font-bold my-2" {...props} />,
+                                                                h2: ({node, ...props}) => <h2 className="text-lg font-bold my-2" {...props} />,
+                                                                h3: ({node, ...props}) => <h3 className="text-base font-bold my-1" {...props} />,
+                                                                a: ({node, ...props}) => <a className="text-blue-500 hover:underline" {...props} />,
+                                                                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 italic my-2" {...props} />,
+                                                                code: ({node, inline, className, children, ...props}: any) => {
+                                                                    const match = /language-(\w+)/.exec(className || '');
+                                                                    return !inline && match ? (
+                                                                        <SyntaxHighlighter
+                                                                            {...props}
+                                                                            style={vscDarkPlus}
+                                                                            language={match[1]}
+                                                                            PreTag="div"
+                                                                        >
+                                                                            {String(children).replace(/\n$/, '')}
+                                                                        </SyntaxHighlighter>
+                                                                    ) : (
+                                                                        <code className="bg-muted px-1 rounded font-mono text-xs" {...props}>
+                                                                            {children}
+                                                                        </code>
+                                                                    );
+                                                                },
+                                                            }}
+                                                        >
+                                                            {teachingPlan}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                </ScrollArea>
+                                            </CardContent>
+                                        </Card>
                                     </div>
+                                </ResizablePanel>
+                                <ResizableHandle withHandle />
+                            </>
+                        )}
+
+                        <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "35" : "40"} minSize="10" className="bg-muted/30 flex flex-col">
+                            <div className="h-full p-4 flex flex-col gap-4">
+                                <div className="flex-1 min-h-0">
+                                    {selectedNode && chatMessages.length === 0 && !teachingPlan ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-6 bg-card rounded-lg border shadow-sm">
+                                            <h3 className="text-lg font-semibold">{t('app.confirm_learning', { topic: selectedNode.name })}</h3>
+                                            <p className="text-sm text-muted-foreground">
+                                            {t('app.start_learning_desc')}
+                                            </p>
+                                            <Button onClick={handleStartLearning} disabled={isChatLoading}>
+                                            {isChatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            {t('app.start_learning_btn')}
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <ChatInterface 
+                                            messages={chatMessages} 
+                                            onSendMessage={handleSendMessage}
+                                            currentNodeName={selectedNode?.name || null}
+                                            isLoading={isChatLoading}
+                                            showStartLesson={isPlanView}
+                                            onStartLesson={handleConfirmStartLesson}
+                                            interactionState={interactionState}
+                                            onStartQuiz={handleStartQuiz}
+                                            onExplainAgain={handleExplainAgain}
+                                        />
+                                    )}
                                 </div>
-                            )}
                             </div>
                         </ResizablePanel>
-                    </>
-                )}
-
-            </ResizablePanelGroup>
-        </div>
-      </main>
-      <Toaster />
+                        
+                        
+                        {(showGraphPanel || showIDE) && (
+                            <>
+                                <ResizableHandle withHandle />
+                                <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "40" : "60"} minSize="10">
+                                    {showIDE ? (
+                                        <IDEPanel />
+                                    ) : (
+                                        <div className="h-full relative bg-background">
+                                            <KnowledgeGraph 
+                                                data={graphData} 
+                                                onNodeClick={handleNodeClick} 
+                                                onNodeContextMenu={handleNodeContextMenu}
+                                                theme={theme}
+                                            />
+                                            <div className="absolute top-4 left-4 z-10 w-auto">
+                                                <Dashboard state={learnerState} graphData={graphData} />
+                                            </div>
+                                            {!graphData && !isGenerating && (
+                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                                                {t('graph.enter_topic')}
+                                                </div>
+                                            )}
+                                            {isGenerating && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-50">
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                                        <p>{t('graph.generating')}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </ResizablePanel>
+                            </>
+                        )}
+                    </ResizablePanelGroup>
+                </div>
+              </main>
+           </>
+       )}
+       
+       <GenerateGraphDialog 
+          open={isDialogOpen} 
+          onOpenChange={setIsDialogOpen}
+          inputTopic={inputTopic}
+          setInputTopic={setInputTopic}
+          inputLevel={inputLevel}
+          setInputLevel={setInputLevel}
+          inputGoal={inputGoal}
+          setInputGoal={setInputGoal}
+          isGenerating={isGenerating}
+          onGenerate={handleGenerateGraph}
+          t={t}
+       />
+       <Toaster />
     </div>
   );
 }

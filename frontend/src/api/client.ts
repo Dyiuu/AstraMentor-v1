@@ -82,5 +82,13 @@ export const api = {
             answer
         });
         return response.data;
+    },
+
+    runCode: async (code: string, language: string) => {
+        const response = await client.post<{ output: string, error: string, exit_code: number }>('/run-code', {
+            code,
+            language
+        });
+        return response.data;
     }
 };
