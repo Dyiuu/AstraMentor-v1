@@ -428,8 +428,8 @@ ${evaluation.analysis}
           
           setInteractionState('chat');
           
-          // Refresh graph and state
-          updateGraphNodeMastery(selectedNode.name, evaluation.score);
+          // Refresh graph and state with NEW MASTERY
+          updateGraphNodeMastery(selectedNode.name, evaluation.new_mastery);
           loadState();
           
       } else {

@@ -39,3 +39,4 @@ class EvaluationResponse(BaseModel):
     feedback: str
     analysis: str
     is_mastered: bool
+    new_mastery: float

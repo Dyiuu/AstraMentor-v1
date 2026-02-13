@@ -52,4 +52,5 @@ export interface EvaluationResult {
     feedback: string;
     analysis: string;
     is_mastered: boolean;
+    new_mastery: number;
 }

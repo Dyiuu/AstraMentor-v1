@@ -115,5 +115,6 @@ async def evaluate(request: EvaluateRequest, service: LearningService = Depends(
         score=evaluation.score,
         feedback=feedback,
         analysis=evaluation.analysis,
-        is_mastered=kp.is_mastered()
+        is_mastered=kp.is_mastered(),
+        new_mastery=evaluation.scoring_result.new_mastery if evaluation.scoring_result else kp.actual_mastery
     )
