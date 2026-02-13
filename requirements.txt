@@ -15,3 +15,11 @@ orjson>=3.9.0
 
 # 测试框架
 pytest>=7.0.0
+
+# Web Backend
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+
+# Graph Generation
+networkx>=3.0

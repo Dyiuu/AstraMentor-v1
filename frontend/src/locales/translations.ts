@@ -1,0 +1,138 @@
+export const zh = {
+  app: {
+    title: "AstraMentor",
+    search_placeholder: "请输入您想学习的主题...",
+    generate_btn: "星图生成",
+    generating: "正在生成星图...",
+    history_sidebar: "历史星图",
+    no_history: "暂无历史记录",
+    delete_history: "删除历史记录",
+    delete_current: "已清空并删除当前会话",
+    delete_success: "已删除历史记录",
+    confirm_learning: "准备好学习 \"{topic}\" 了吗？",
+    start_learning_desc: "点击下方按钮开始学习之旅。AI 导师将为你量身定制教学内容。",
+    start_learning_btn: "开始学习",
+    current_plan: "当前教学计划",
+    view_plan: "显示计划",
+    hide_plan: "隐藏计划",
+    view_graph: "显示星图",
+    hide_graph: "隐藏星图",
+    eye_mode: "护眼模式",
+    day_mode: "白天模式",
+    input_placeholder: "例如：Python, 机器学习, React",
+    dialog_title: "生成知识星图",
+    dialog_desc: "输入你想要学习的主题、目标和当前水平，AI 将为你定制专属学习路径。",
+    topic_label: "学习主题",
+    goal_label: "学习用途",
+    goal_placeholder: "例如：面试冲刺, 项目实战, 兴趣",
+    level_label: "当前水平",
+    level_placeholder: "例如：零基础, 有一定经验, 专家",
+    level_beginner: "零基础",
+    level_intermediate: "有一定基础",
+    level_advanced: "精通",
+    cancel: "取消",
+    generate: "生成星图",
+    generating_graph: "正在生成个性化星图...",
+    start_generate: "开始生成"
+  },
+  graph: {
+     enter_topic: "请输入主题以生成知识图谱",
+     generating: "正在生成知识图谱...",
+     relation_info: "关系说明",
+     relation_strength: "关联强度"
+  },
+  dashboard: {
+      total: "总知识点",
+      mastered: "已掌握",
+      average_mastery: "平均掌握度"
+  },
+  chat: {
+      placeholder: "有问题？随时问我...",
+      send: "发送",
+      learning: "正在学习: {node}",
+      ai_tutor: "AstraMentor AI",
+      thinking: "AI 正在思考...",
+      start_lesson: "开始上课",
+      select_node: "请先选择一个知识点开始学习"
+  },
+  node_modal: {
+      success: "知识点已更新",
+      fail: "更新失败",
+      no_desc: "暂无描述",
+      mastered_label: "已掌握 (A)",
+      target_label: "期望目标 (B)",
+      note_label: "备注",
+      save: "保存修改",
+      saving: "保存中..."
+  }
+
+};
+
+export const en = {
+  graph: {
+     enter_topic: "Enter a topic to generate a Knowledge Graph",
+     generating: "Generating Knowledge Graph...",
+     relation_info: "Relationship",
+     relation_strength: "Strength"
+  },
+  dashboard: {
+      total: "Total Nodes",
+      mastered: "Mastered",
+      average_mastery: "Avg Mastery"
+  },
+  chat: {
+      placeholder: "Questions? Ask me...",
+      send: "Send",
+      learning: "Learning: {node}",
+      ai_tutor: "AstraMentor AI",
+      thinking: "AI is thinking...",
+      start_lesson: "Start Lesson",
+      select_node: "Select a node to start learning"
+  },
+  app: {
+    title: "AstraMentor",
+    search_placeholder: "Enter a topic to learn...",
+    generate_btn: "Generate Graph",
+    generating: "Generating...",
+    history_sidebar: "History",
+    no_history: "No History",
+    delete_history: "Delete History",
+    delete_current: "Current session cleared and deleted",
+    delete_success: "History deleted",
+    confirm_learning: "Ready to learn \"{topic}\"?",
+    start_learning_desc: "Click below to start. AI Tutor will customize the content for you.",
+    start_learning_btn: "Start Learning",
+    current_plan: "Teaching Plan",
+    view_plan: "Show Plan",
+    hide_plan: "Hide Plan",
+    view_graph: "Show Graph",
+    hide_graph: "Hide Graph",
+    eye_mode: "Eye Care",
+    day_mode: "Day Mode",
+    input_placeholder: "e.g., Python, Machine Learning, React",
+    dialog_title: "Generate Knowledge Graph",
+    dialog_desc: "Enter the topic, goal, and your current level. AI will customize a learning path for you.",
+    topic_label: "Topic",
+    goal_label: "Usage/Goal",
+    goal_placeholder: "e.g., Interview Prep, Projects, Interest",
+    level_label: "Current Level",
+    level_placeholder: "e.g., Beginner, Some Experience, Expert",
+    level_beginner: "Beginner",
+    level_intermediate: "Intermediate",
+    level_advanced: "Advanced",
+    cancel: "Cancel",
+    generate: "Generate",
+    generating_graph: "Generating personalized graph...",
+    start_generate: "Start Generating"
+  },
+  node_modal: {
+      success: "Knowledge point updated",
+      fail: "Failed to update",
+      no_desc: "No description available.",
+      mastered_label: "Mastered (A)",
+      target_label: "Target (B)",
+      note_label: "Note",
+      save: "Save Changes",
+      saving: "Saving..."
+  }
+};

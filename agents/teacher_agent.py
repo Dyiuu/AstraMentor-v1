@@ -223,6 +223,7 @@ class TeacherAgent:
         knowledge_point: KnowledgePoint,
         teaching_content: str,
         question: str,
+        image: Optional[str] = None,
         discussion_history: list = None
     ) -> str:
         """
@@ -262,6 +263,7 @@ class TeacherAgent:
 
         answer = self.api_client.generate(
             prompt=prompt,
+            image=image,
             system_instruction=system_instruction,
             temperature=0.7,
             max_tokens=1500

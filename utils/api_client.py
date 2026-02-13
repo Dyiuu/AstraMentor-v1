@@ -39,6 +39,7 @@ class APIClient:
     def generate(
         self,
         prompt: str,
+        image: Optional[str] = None,
         system_instruction: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None
@@ -51,9 +52,36 @@ class APIClient:
                 # 新 SDK 支持 system_instruction（字段名依版本可能略有差异，但这是主流写法）
                 cfg.system_instruction = system_instruction
 
+            contents = [prompt]
+            
+            if image:
+                import base64
+                try:
+                    mime_type = "image/jpeg"
+                    image_data = image
+                    if "base64," in image:
+                        header, image_data = image.split("base64,")
+                        if "image/" in header:
+                            mime_type = header.split(";")[0].split(":")[1]
+                    
+                    decoded_data = base64.b64decode(image_data)
+                    contents = [
+                        types.Part(text=prompt),
+                        types.Part(
+                            inline_data=types.Blob(
+                                mime_type=mime_type,
+                                data=decoded_data
+                            )
+                        )
+                    ]
+                except Exception as e:
+                    logger.error(f"Failed to process image: {e}")
+                    # Fallback to text only if image fails
+                    contents = [prompt]
+
             resp = self.client.models.generate_content(
                 model=self.model_name,
-                contents=prompt,
+                contents=contents,
                 config=cfg,
             )
             # 新 SDK 一般是 resp.text
@@ -98,7 +126,11 @@ class APIClient:
                 raise
         else:
             # 没 schema：走文本 -> json.loads
-            text = self.generate(prompt, system_instruction, temperature)
+            text = self.generate(
+                prompt=prompt, 
+                system_instruction=system_instruction, 
+                temperature=temperature
+            )
             text = text.strip()
             if text.startswith("```json"):
                 text = text[7:]
