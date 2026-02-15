@@ -35,7 +35,7 @@ export function HistorySidebar({
     if (!isOpen) return null;
 
     return (
-        <div className="w-64 border-r bg-background flex flex-col h-full shrink-0 session-sidebar animate-in slide-in-from-left-5 duration-300">
+        <div className="w-full h-full flex flex-col shrink-0 session-sidebar bg-transparent">
             <div className="p-4 border-b flex justify-between items-center bg-muted/30">
                 <h2 className="font-semibold text-lg flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-blue-600" />

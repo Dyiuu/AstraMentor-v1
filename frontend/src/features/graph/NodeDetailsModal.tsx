@@ -74,7 +74,7 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
               max="1"
               value={weightA}
               onChange={(e) => setWeightA(parseFloat(e.target.value))}
-              className="col-span-3"
+              className="col-span-3 bg-slate-50 border-slate-200 focus:border-blue-500 transition-colors"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -89,7 +89,7 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
               max="1"
               value={weightB}
               onChange={(e) => setWeightB(parseFloat(e.target.value))}
-              className="col-span-3"
+              className="col-span-3 bg-slate-50 border-slate-200 focus:border-blue-500 transition-colors"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -100,7 +100,7 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
               id="userNote"
               value={userNote}
               onChange={(e) => setUserNote(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 bg-slate-50 border-slate-200 focus:border-blue-500 transition-colors min-h-[100px]"
             />
           </div>
         </div>

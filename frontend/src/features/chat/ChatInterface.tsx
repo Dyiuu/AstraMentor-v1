@@ -105,8 +105,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }
 
   return (
-    <Card className="flex flex-col h-full shadow-md rounded-lg overflow-hidden border-border bg-card">
-      <CardHeader className="border-b bg-muted/40 py-3">
+    <Card className="flex flex-col h-full shadow-none border-none bg-transparent">
+      <CardHeader className="border-b border-white/10 bg-transparent py-3">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <BookOpen className="w-5 h-5 text-primary" />
           {t('chat.learning', {node: currentNodeName}) }
@@ -114,7 +114,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </CardHeader>
       
       {/* Rest of the chat interface... */}
-      <CardContent className="flex-1 overflow-hidden p-0 bg-background relative">
+      <CardContent className="flex-1 overflow-hidden p-0 bg-transparent relative">
         <ScrollArea className="h-full p-4">
         {/* ... existing code ... */}
           <div className="flex flex-col gap-4 pb-4">
@@ -129,7 +129,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground rounded-tr-none'
-                      : 'bg-muted/50 border border-border/50 text-foreground rounded-tl-none'
+                      : 'bg-white/40 border border-white/20 text-foreground rounded-tl-none'
                   }`}
                 >
                   <div className="prose prose-sm dark:prose-invert max-w-none break-words">
@@ -180,7 +180,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             ))}
              {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-4 py-2 shadow-sm">
+                <div className="bg-white/40 rounded-lg px-4 py-2 shadow-sm">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                     <span className="w-2 h-2 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
@@ -226,7 +226,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </ScrollArea>
       </CardContent>
-      <CardFooter className="border-t p-4 flex-col gap-2 bg-background">
+      <CardFooter className="border-t border-white/10 p-4 flex-col gap-2 bg-transparent">
         {selectedImage && (
           <div className="relative w-full flex justify-start animate-in fade-in zoom-in duration-200">
             <div className="relative group">

@@ -39,12 +39,17 @@ export const zh = {
      enter_topic: "请输入主题以生成知识图谱",
      generating: "正在生成知识图谱...",
      relation_info: "关系说明",
-     relation_strength: "关联强度"
+     relation_strength: "关联强度",
+     layout_vertical: "纵向",
+     layout_horizontal: "横向",
+     fit_view: "定位"
   },
   dashboard: {
       total: "总知识点",
       mastered: "已掌握",
-      average_mastery: "平均掌握度"
+      average_mastery: "平均掌握度",
+      collapse: "收起数据",
+      expand: "展开数据"
   },
   chat: {
       placeholder: "有问题？随时问我...",
@@ -75,12 +80,17 @@ export const en = {
      enter_topic: "Enter a topic to generate a Knowledge Graph",
      generating: "Generating Knowledge Graph...",
      relation_info: "Relationship",
-     relation_strength: "Strength"
+     relation_strength: "Strength",
+     layout_vertical: "Vertical",
+     layout_horizontal: "Horizontal",
+     fit_view: "Fit View"
   },
   dashboard: {
       total: "Total Nodes",
       mastered: "Mastered",
-      average_mastery: "Avg Mastery"
+      average_mastery: "Avg Mastery",
+      collapse: "Collapse Stats",
+      expand: "Expand Stats"
   },
   chat: {
       placeholder: "Questions? Ask me...",

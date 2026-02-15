@@ -213,8 +213,10 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
   useEffect(() => {
     if (!containerRef.current || !data) {
       if (graphRef.current) {
-        graphRef.current.destroy();
+        // NOTE: 先清引用再销毁，避免异步回调访问已销毁实例
+        const g = graphRef.current;
         graphRef.current = null;
+        g.destroy();
       }
       return;
     }
@@ -224,16 +226,18 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
 
     // 如果图表已存在，只更新数据
     if (graphRef.current) {
-      graphRef.current.setData(g6Data);
-      graphRef.current.setLayout(getLayoutConfig(layoutType));
-      graphRef.current.render().then(() => {
-        // NOTE: 重渲染后恢复之前的高亮状态
-        if (highlightedNodeRef.current && graphRef.current) {
-          applyHighlight(graphRef.current, highlightedNodeRef.current);
+      const existingGraph = graphRef.current;
+      existingGraph.setData(g6Data);
+      existingGraph.setLayout(getLayoutConfig(layoutType));
+      existingGraph.render().then(() => {
+        // NOTE: 确保图表在 render 完成时仍然存在且未被替换
+        if (graphRef.current === existingGraph) {
+          existingGraph.fitView();
+          if (highlightedNodeRef.current) {
+            applyHighlight(existingGraph, highlightedNodeRef.current);
+          }
         }
-      }).catch((err: Error) => {
-        console.error('Graph re-render error:', err);
-      });
+      }).catch(() => { /* 忽略已销毁图表的错误 */ });
       return;
     }
 
@@ -245,8 +249,9 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
       if (!mounted || !containerRef.current) return;
 
       const rect = containerRef.current.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        retryTimer = setTimeout(createGraph, 100);
+      // NOTE: 容器尺寸太小时重试，面板可能还在过渡动画中
+      if (rect.width < 50 || rect.height < 50) {
+        retryTimer = setTimeout(createGraph, 150);
         return;
       }
 
@@ -379,12 +384,13 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
       });
 
       graph.render().then(() => {
-        if (mounted) {
+        // NOTE: 双重防护—确保组件仍挂载且 graph 未被替换
+        if (mounted && graphRef.current === null) {
           graphRef.current = graph;
+          // 初始渲染后立即 fitView，确保图谱居中适配视口
+          graph.fitView();
         }
-      }).catch((err: Error) => {
-        console.error('[KnowledgeGraph] Graph render error:', err);
-      });
+      }).catch(() => { /* 忽略已销毁图表的错误 */ });
     };
 
     createGraph();
@@ -392,28 +398,39 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
     return () => {
       mounted = false;
       clearTimeout(retryTimer);
+      // NOTE: 先清 ref 再销毁，避免异步回调访问已销毁实例
+      graphRef.current = null;
       if (graphInstance) {
         graphInstance.destroy();
       }
-      graphRef.current = null;
     };
   }, [data, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // NOTE: 单独的 ResizeObserver，仅用于调整已存在图表的尺寸
+  // NOTE: 单独的 ResizeObserver，面板重新打开时自动 resize + fitView
   useEffect(() => {
     if (!containerRef.current) return;
+
+    let fitViewTimer: ReturnType<typeof setTimeout>;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0 && graphRef.current) {
           graphRef.current.resize(width, height);
+          // NOTE: 防抖 fitView，避免拖拽面板时频繁触发
+          clearTimeout(fitViewTimer);
+          fitViewTimer = setTimeout(() => {
+            graphRef.current?.fitView();
+          }, 200);
         }
       }
     });
 
     observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(fitViewTimer);
+      observer.disconnect();
+    };
   }, []);
 
   /**
@@ -430,6 +447,15 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
 
   const handleOuterClick = useCallback(() => {
     setSelectedEdgeInfo(null);
+  }, []);
+
+  /**
+   * 一键定位：将图谱居中并自适应缩放到视口
+   */
+  const handleFitView = useCallback(() => {
+    if (graphRef.current) {
+      graphRef.current.fitView();
+    }
   }, []);
 
   return (
@@ -473,9 +499,39 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
                   : 'none',
               }}
             >
-              {type === 'TB' ? '↓ 纵向' : '→ 横向'}
+              {type === 'TB' ? `↓ ${t('graph.layout_vertical')}` : `→ ${t('graph.layout_horizontal')}`}
             </button>
           ))}
+
+          {/* 分隔线 */}
+          <div style={{ width: 1, height: 20, background: 'rgba(0,0,0,0.1)', margin: '0 4px', alignSelf: 'center' }} />
+
+          {/* 一键定位按钮 */}
+          <button
+            onClick={(e) => { e.stopPropagation(); handleFitView(); }}
+            title="一键定位：自适应视口"
+            style={{
+              padding: '7px 14px',
+              borderRadius: 10,
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              transition: 'all 0.2s ease',
+              background: 'transparent',
+              color: '#64748b',
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(99,102,241,0.1)';
+              (e.target as HTMLButtonElement).style.color = '#6366f1';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'transparent';
+              (e.target as HTMLButtonElement).style.color = '#64748b';
+            }}
+          >
+             ⊙ {t('graph.fit_view')}
+          </button>
         </div>
       )}
 

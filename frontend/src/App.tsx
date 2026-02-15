@@ -12,7 +12,7 @@ import ChatInterface from './features/chat/ChatInterface';
 import Dashboard from './features/dashboard/Dashboard';
 import HomePage from './features/home/HomePage';
 import { Button } from './components/ui/button';
-import { Search, Loader2, Book, Menu, Sun, Eye, Languages, Code } from 'lucide-react';
+import { Search, Loader2, Book, Menu, Sun, BookOpen, Code, Sparkles } from 'lucide-react';
 import { IDEPanel } from './features/ide/IDEPanel';
 import { GenerateGraphDialog } from './features/graph/GenerateGraphDialog';
 import { ScrollArea } from './components/ui/scroll-area';
@@ -73,7 +73,7 @@ function App() {
   const [showPlanPanel, setShowPlanPanel] = useState(true);
   const [showGraphPanel, setShowGraphPanel] = useState(true);
   const [showIDE, setShowIDE] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
   
   // Theme State
   const [theme, setTheme] = useState<'light' | 'eye-care'>('light');
@@ -459,16 +459,22 @@ ${evaluation.analysis}
        {showLanding ? (
            <HomePage onStart={() => setShowLanding(false)} />
        ) : (
-           <>
-              <header className="border-b p-4 flex items-center justify-between bg-background z-10 relative">
+           <div className="flex flex-col h-full bg-background/50"> {/* Soft background wrapper */}
+              <header className="px-6 py-4 flex items-center justify-between bg-transparent z-10 relative">
                   <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => setShowHistory(!showHistory)} className="mr-1">
-                        <Menu className="h-6 w-6" />
+                    <Button variant="ghost" size="icon" onClick={() => setShowHistory(!showHistory)} className="mr-1 hover:bg-white/50">
+                        <Menu className="h-6 w-6 text-foreground/80" />
                     </Button>
                     
-                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => setShowLanding(true)} title="Back to Home">
-                        <img src="/logo.png" alt="AstraMentor Logo" className="w-12 h-12 object-contain" />
-                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+                    <div className="flex items-center gap-4">
+                        <div 
+                            className="p-2 bg-white rounded-xl shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
+                            onClick={() => setShowLanding(true)} 
+                            title="Back to Home"
+                        >
+                            <img src="/logo.png" alt="AstraMentor Logo" className="w-8 h-8 object-contain" />
+                        </div>
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent tracking-tight">
                           AstraMentor
                         </h1>
                     </div>
@@ -476,31 +482,31 @@ ${evaluation.analysis}
                     {/* Panel Toggles */}
                     <div className="flex items-center gap-2 ml-4">
                         <Button 
-                            variant="outline"
+                            variant="ghost"
                             size="icon"
                             onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-                            className="text-muted-foreground hover:text-foreground"
+                            className="text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"
                             title={language === 'zh' ? "Switch to English" : "切换到中文"}
                         >
-                            <Languages className="h-4 w-4" />
+                            <span className="text-sm font-bold font-mono">{language === 'zh' ? 'En' : 'Zh'}</span>
                         </Button>
 
                         <Button 
-                            variant="outline"
+                            variant="ghost"
                             size="icon"
                             onClick={() => setTheme(theme === 'light' ? 'eye-care' : 'light')}
-                            className={theme === 'eye-care' ? "bg-amber-100 text-amber-900 border-amber-200 hover:bg-amber-200" : "text-muted-foreground hover:text-foreground"}
+                            className={theme === 'eye-care' ? "bg-amber-100/50 text-amber-900 hover:bg-amber-200/50 rounded-xl" : "text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"}
                             title={theme === 'light' ? "开启护眼模式" : "切换回白天模式"}
                         >
-                            {theme === 'light' ? <Eye className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                            {theme === 'light' ? <BookOpen className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                         </Button>
 
                         {teachingPlan && !isPlanView && (
                             <Button 
-                                variant={showPlanPanel ? "default" : "outline"} 
+                                variant={showPlanPanel ? "secondary" : "ghost"} 
                                 size="sm"
                                 onClick={() => setShowPlanPanel(!showPlanPanel)}
-                                className={showPlanPanel ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200" : "text-muted-foreground"}
+                                className={showPlanPanel ? "bg-white shadow-sm text-blue-700 rounded-xl" : "text-muted-foreground hover:bg-white/50 rounded-xl"}
                             >
                                 <Book className="mr-2 h-4 w-4" />
                                 {showPlanPanel ? t('app.hide_plan') : t('app.view_plan')}
@@ -508,16 +514,13 @@ ${evaluation.analysis}
                         )}
                         
                         <Button 
-                            variant={showIDE ? "default" : "outline"}
+                            variant={showIDE ? "secondary" : "ghost"}
                             size="sm"
                             onClick={() => {
                                 setShowIDE(!showIDE);
-                                if (!showIDE) setShowGraphPanel(false); // Auto-hide graph when opening IDE? Or just overlay?
-                                // Let's just let them toggle independently, but IDE takes precedence in view or replaces it.
-                                // If I use the same panel, I should probably toggle the other one off or just let the render logic handle it.
-                                // Let's keep it simple: IDE button toggles IDE mode.
+                                if (!showIDE) setShowGraphPanel(false); 
                             }}
-                            className={showIDE ? "bg-green-100 text-green-700 hover:bg-green-200 border-green-200" : "text-muted-foreground"}
+                            className={showIDE ? "bg-white shadow-sm text-green-700 rounded-xl" : "text-muted-foreground hover:bg-white/50 rounded-xl"}
                             title="Open Code Editor"
                         >
                             <Code className="mr-2 h-4 w-4" />
@@ -525,13 +528,13 @@ ${evaluation.analysis}
                         </Button>
 
                         <Button 
-                            variant={showGraphPanel ? "default" : "outline"}
+                            variant={showGraphPanel ? "secondary" : "ghost"}
                             size="sm" 
                             onClick={() => {
                                 setShowGraphPanel(!showGraphPanel);
-                                if (!showGraphPanel) setShowIDE(false); // Switch back to graph
+                                if (!showGraphPanel) setShowIDE(false); 
                             }}
-                            className={showGraphPanel ? "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200" : "text-muted-foreground"}
+                            className={showGraphPanel ? "bg-white shadow-sm text-slate-700 rounded-xl" : "text-muted-foreground hover:bg-white/50 rounded-xl"}
                         >
                             <Search className="mr-2 h-4 w-4" />
                             {showGraphPanel ? t('app.hide_graph') : t('app.view_graph')}
@@ -539,39 +542,43 @@ ${evaluation.analysis}
                     </div>
                 </div>
 
-                <Button onClick={() => setIsDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
-                    <Search className="mr-2 h-4 w-4" />
+                <Button onClick={() => setIsDialogOpen(true)} className="bg-primary/80 hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl px-6">
+                    <Sparkles className="mr-2 h-4 w-4" />
                     {t('app.generate_btn')}
                 </Button>
               </header>
 
-              <main className="flex-1 flex overflow-hidden">
+              <main className="flex-1 flex overflow-hidden p-6 gap-6 pt-0">
                 {/* History Sidebar */}
-                <HistorySidebar 
-                    isOpen={showHistory} 
-                    sessions={graphSessions} 
-                    currentSessionId={currentSessionId}
-                    onSelectSession={handleLoadSession}
-                    onDeleteSession={handleDeleteSession}
-                    onClose={() => setShowHistory(false)}
-                />
+                <div className={`transition-all duration-300 ${showHistory ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+                    <div className="h-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-sm border border-white/20 overflow-hidden">
+                        <HistorySidebar 
+                            isOpen={true} // Always render internal logic if container is visible
+                            sessions={graphSessions} 
+                            currentSessionId={currentSessionId}
+                            onSelectSession={handleLoadSession}
+                            onDeleteSession={handleDeleteSession}
+                            onClose={() => setShowHistory(false)}
+                        />
+                    </div>
+                </div>
 
-                <div className="flex-1 flex overflow-hidden">
-                    <ResizablePanelGroup orientation="horizontal">
+                <div className="flex-1 flex overflow-hidden bg-white/60 backdrop-blur-xl rounded-3xl shadow-sm border border-white/20">
+                    <ResizablePanelGroup orientation="horizontal" className="h-full w-full rounded-3xl">
                         
                         {!isPlanView && teachingPlan && showPlanPanel && (
                             <>
-                                <ResizablePanel defaultSize="25" minSize="10" maxSize="80" className="bg-muted/30 flex flex-col">
+                                <ResizablePanel defaultSize="25" minSize="10" maxSize="80" className="flex flex-col bg-transparent">
                                     <div className="h-full p-4 flex flex-col gap-4 animate-in slide-in-from-left-5 duration-300">
-                                        <Card className="h-full flex flex-col border-border bg-card/60 shadow-sm">
-                                            <CardHeader className="py-3 px-4 border-b bg-muted/20">
+                                        <Card className="h-full flex flex-col border-none shadow-none bg-transparent">
+                                            <CardHeader className="py-3 px-4 bg-transparent">
                                                 <CardTitle className="text-sm font-medium flex items-center gap-2 text-primary">
                                                     <Book className="w-4 h-4" />
                                                     {t('app.current_plan')}
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent className="p-0 flex-1 overflow-hidden">
-                                                <ScrollArea className="h-full p-4">
+                                                <ScrollArea className="h-full pr-4">
                                                     <div className="text-sm text-foreground leading-relaxed">
                                                         <ReactMarkdown 
                                                             remarkPlugins={[remarkGfm]}
@@ -591,11 +598,12 @@ ${evaluation.analysis}
                                                                             style={vscDarkPlus}
                                                                             language={match[1]}
                                                                             PreTag="div"
+                                                                            customStyle={{ borderRadius: '1rem' }}
                                                                         >
                                                                             {String(children).replace(/\n$/, '')}
                                                                         </SyntaxHighlighter>
                                                                     ) : (
-                                                                        <code className="bg-muted px-1 rounded font-mono text-xs" {...props}>
+                                                                        <code className="bg-muted px-1 rounded-md font-mono text-xs" {...props}>
                                                                             {children}
                                                                         </code>
                                                                     );
@@ -610,20 +618,20 @@ ${evaluation.analysis}
                                         </Card>
                                     </div>
                                 </ResizablePanel>
-                                <ResizableHandle withHandle />
+                                <ResizableHandle withHandle className="bg-transparent opacity-50 hover:opacity-100" />
                             </>
                         )}
 
-                        <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "35" : "40"} minSize="10" className="bg-muted/30 flex flex-col">
-                            <div className="h-full p-4 flex flex-col gap-4">
+                        <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "35" : "40"} minSize="10" className="flex flex-col bg-transparent">
+                            <div className="h-full p-0 flex flex-col gap-4">
                                 <div className="flex-1 min-h-0">
                                     {selectedNode && chatMessages.length === 0 && !teachingPlan ? (
-                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-6 bg-card rounded-lg border shadow-sm">
+                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-6 bg-transparent rounded-lg">
                                             <h3 className="text-lg font-semibold">{t('app.confirm_learning', { topic: selectedNode.name })}</h3>
                                             <p className="text-sm text-muted-foreground">
                                             {t('app.start_learning_desc')}
                                             </p>
-                                            <Button onClick={handleStartLearning} disabled={isChatLoading}>
+                                            <Button onClick={handleStartLearning} disabled={isChatLoading} className="rounded-xl shadow-md">
                                             {isChatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                             {t('app.start_learning_btn')}
                                             </Button>
@@ -648,12 +656,12 @@ ${evaluation.analysis}
                         
                         {(showGraphPanel || showIDE) && (
                             <>
-                                <ResizableHandle withHandle />
+                                <ResizableHandle withHandle className="bg-transparent opacity-50 hover:opacity-100" />
                                 <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "40" : "60"} minSize="10">
                                     {showIDE ? (
                                         <IDEPanel />
                                     ) : (
-                                        <div className="h-full relative bg-background">
+                                        <div className="h-full relative bg-transparent">
                                             <KnowledgeGraph 
                                                 data={graphData} 
                                                 onNodeClick={handleNodeClick} 
@@ -664,12 +672,30 @@ ${evaluation.analysis}
                                                 <Dashboard state={learnerState} graphData={graphData} />
                                             </div>
                                             {!graphData && !isGenerating && (
-                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                                                {t('graph.enter_topic')}
+                                                <div className="absolute inset-0 flex flex-col bg-slate-50/50">
+                                                    {/* Spacer to align with ChatInterface header */}
+                                                    <div className="py-3 px-6 invisible">
+                                                         <div className="flex items-center gap-2 text-base font-medium">
+                                                            <div className="w-5 h-5" />
+                                                            Spacer
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
+                                                        <div className="bg-slate-100 p-4 rounded-full mb-4">
+                                                            <Sparkles className="w-8 h-8 text-slate-400" />
+                                                        </div>
+                                                        <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                                                            {t('app.dialog_title')}
+                                                        </h3>
+                                                        <p className="max-w-xs text-sm">
+                                                            {t('graph.enter_topic')}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             )}
                                             {isGenerating && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-50">
+                                                <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-50">
                                                     <div className="flex flex-col items-center gap-2">
                                                         <Loader2 className="w-8 h-8 animate-spin text-primary" />
                                                         <p>{t('graph.generating')}</p>
@@ -684,7 +710,7 @@ ${evaluation.analysis}
                     </ResizablePanelGroup>
                 </div>
               </main>
-           </>
+           </div>
        )}
        
        <GenerateGraphDialog 
