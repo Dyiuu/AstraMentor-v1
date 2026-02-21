@@ -56,6 +56,24 @@ class LearningService:
             logger.error(f"Failed to generate knowledge graph: {e}")
             return None
 
+    def save_graph(self, topic: str, graph_data: Dict[str, Any]) -> bool:
+        """
+        将修改后的图谱数据写回磁盘 JSON 文件
+        NOTE: 文件路径规则与 generate_knowledge_graph 保持一致
+        """
+        try:
+            test_data_dir = Path("test_data")
+            test_data_dir.mkdir(exist_ok=True)
+            graph_filename = f"knowledge_graph_{topic.replace(' ', '_').replace('/', '_')}.json"
+            graph_file = test_data_dir / graph_filename
+            with open(graph_file, "w", encoding="utf-8") as f:
+                json.dump(graph_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Graph saved to {graph_file}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save graph: {e}")
+            return False
+
     def get_knowledge_point(self, name: str) -> Optional[KnowledgePoint]:
         """Retrieves a knowledge point by name."""
         return self.learner_state.get_knowledge_point(name)

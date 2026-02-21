@@ -41,6 +41,12 @@ class EvaluationResponse(BaseModel):
     is_mastered: bool
     new_mastery: float
 
+class SaveGraphRequest(BaseModel):
+    """保存/更新图谱数据到磁盘"""
+    topic: str
+    graph_data: Dict[str, Any]
+
+
 class RunCodeRequest(BaseModel):
     code: str
     language: str

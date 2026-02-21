@@ -50,7 +50,8 @@ function App() {
   const [currentGraphLevel, setCurrentGraphLevel] = useState('');
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [learnerState, setLearnerState] = useState<LearnerState | null>(null);
-  
+  const [graphViewMode, setGraphViewMode] = useState<'2d' | '3d'>('2d');
+
   // Current Active Node
   const [selectedNode, setSelectedNode] = useState<{ id: string; name: string; attributes?: any } | null>(null);
   
@@ -111,6 +112,119 @@ function App() {
     setContextMenuNode(node);
   };
 
+  /**
+   * 删除星图节点及其关联边
+   * NOTE: 同步更新前端状态，并调用后端 API 将变更持久化到磁盘 JSON 文件
+   */
+  const handleDeleteNode = async (nodeId: string) => {
+    if (!graphData) return;
+
+    // 先计算删除后的数据，同时用于前端状态更新和后端持久化
+    const updatedNodes = graphData.nodes.filter(n => n.id !== nodeId);
+    const updatedLinks = graphData.links.filter(l => l.source !== nodeId && l.target !== nodeId);
+    const updatedGraphData = { ...graphData, nodes: updatedNodes, links: updatedLinks };
+
+    // 更新前端显示
+    setGraphData(updatedGraphData);
+
+    // 如果删除的是当前选中节点，清除选中状态
+    if (selectedNode?.id === nodeId) {
+      setSelectedNode(null);
+      setChatMessages([]);
+      setTeachingPlan(null);
+      setIsPlanView(false);
+    }
+
+    // 移除该节点的会话记录
+    setNodeSessions(prev => {
+      const next = { ...prev };
+      delete next[nodeId];
+      return next;
+    });
+
+    // 同步更新 graphSessions 历史数据
+    setGraphSessions(prev =>
+      prev.map(s => {
+        if (s.id !== currentSessionId) return s;
+        return {
+          ...s,
+          graphData: updatedGraphData,
+          averageMastery: calculateAverageMastery(updatedNodes),
+        };
+      })
+    );
+
+    // 持久化到磁盘 JSON 文件
+    if (currentTopic) {
+      try {
+        await api.saveGraph(currentTopic, updatedGraphData);
+      } catch (error) {
+        console.error('Failed to save graph to disk:', error);
+      }
+    }
+
+    toast.success(t('node_modal.delete_success'));
+  };
+
+  const calculateAverageMastery = (nodes: any[]): number => {
+      if (!nodes || nodes.length === 0) return 0;
+      const totalMastery = nodes.reduce((sum, node) => sum + (node.attributes?.weight_A || 0), 0);
+      return totalMastery / nodes.length;
+  };
+
+  /**
+   * 更新星图节点数据
+   * NOTE: 同步更新前端状态，并调用后端 API 将变更持久化到磁盘 JSON 文件
+   */
+  const handleUpdateNode = async (updatedData: any) => {
+    if (!graphData || !contextMenuNode) return;
+    
+    // 更新本地 graphData 状态
+    const updatedNodes = graphData.nodes.map(n => {
+       if (n.id === contextMenuNode.id) {
+           return {
+               ...n,
+               weight_A: updatedData.weight_A,
+               weight_B: updatedData.weight_B,
+               user_note: updatedData.user_note,
+               attributes: {
+                 ...n.attributes,
+                 weight_A: updatedData.weight_A,
+                 weight_B: updatedData.weight_B,
+                 user_note: updatedData.user_note
+               }
+           };
+       }
+       return n;
+    });
+    
+    const updatedGraphData = { ...graphData, nodes: updatedNodes };
+    
+    // 立即更新前端显示
+    setGraphData(updatedGraphData);
+    
+    // 重新加载学习状态数据，以刷新进度指示器等信息
+    await loadState();
+
+    // 如果当前有主题，持久化保存至后端 JSON
+    if (currentTopic) {
+        try {
+            await api.saveGraph(currentTopic, updatedGraphData);
+            // 同步历史会话列表中的数据
+            setGraphSessions(prev =>
+              prev.map(session => {
+                 if (session.id === currentSessionId) {
+                    return { ...session, graphData: updatedGraphData, averageMastery: calculateAverageMastery(updatedNodes) };
+                 }
+                 return session;
+              })
+            );
+        } catch (e) {
+            console.error("Failed to persist graph data after node update:", e);
+        }
+    }
+  };
+
   const saveCurrentSession = () => {
       if (!graphData) return;
       
@@ -122,7 +236,8 @@ function App() {
           nodeSessions, // Current node sessions
           learningGoal: currentGoal,
           currentLevel: currentGraphLevel,
-          learnerState
+          learnerState,
+          averageMastery: calculateAverageMastery(graphData.nodes)
       };
 
       setGraphSessions(prev => {
@@ -177,7 +292,8 @@ function App() {
           nodeSessions: {},
           learningGoal: inputGoal,
           currentLevel: inputLevel,
-          learnerState: learnerState
+          learnerState: learnerState,
+          averageMastery: calculateAverageMastery(data.nodes)
       };
       setGraphSessions(prev => [newSession, ...prev]);
 
@@ -383,6 +499,42 @@ function App() {
               })
           };
       });
+
+      // Update session history with new mastery
+      setGraphSessions(prev => {
+          const currentSession = prev.find(s => s.id === currentSessionId);
+          if (!currentSession || !currentSession.graphData) return prev; // Should be consistent with graphData state
+
+          // We need to update the specific node in the session's graphData to calculate correct average
+          const updatedNodes = currentSession.graphData.nodes.map(node => {
+               if (node.name === nodeName) {
+                    return {
+                        ...node,
+                        attributes: {
+                            ...node.attributes,
+                            weight_A: mastery
+                        }
+                    };
+               }
+               return node;
+          });
+          
+          const newAverage = calculateAverageMastery(updatedNodes);
+          
+          return prev.map(s => {
+              if (s.id === currentSessionId) {
+                  return {
+                      ...s,
+                      graphData: {
+                          ...s.graphData,
+                          nodes: updatedNodes
+                      },
+                      averageMastery: newAverage
+                  };
+              }
+              return s;
+          });
+      });
   };
 
   const handleSendMessage = async (message: string, image?: string) => {
@@ -451,9 +603,8 @@ ${evaluation.analysis}
           node={contextMenuNode} 
           isOpen={!!contextMenuNode} 
           onClose={() => setContextMenuNode(null)} 
-          onUpdate={() => {
-              loadState(); 
-          }}
+          onUpdate={(updatedData) => handleUpdateNode(updatedData)}
+          onDelete={handleDeleteNode}
        />
 
        {showLanding ? (
@@ -468,11 +619,11 @@ ${evaluation.analysis}
                     
                     <div className="flex items-center gap-4">
                         <div 
-                            className="p-2 bg-white rounded-xl shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
+                            className="p-1 bg-transparent rounded-xl cursor-pointer hover:bg-white/50 transition-colors" 
                             onClick={() => setShowLanding(true)} 
                             title="Back to Home"
                         >
-                            <img src="/logo.png" alt="AstraMentor Logo" className="w-8 h-8 object-contain" />
+                            <img src="/logo.png" alt="AstraMentor Logo" className="w-10 h-10 object-contain mx-1 my-1" />
                         </div>
                         <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent tracking-tight">
                           AstraMentor
@@ -485,7 +636,7 @@ ${evaluation.analysis}
                             variant="ghost"
                             size="icon"
                             onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-                            className="text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"
+                            className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"
                             title={language === 'zh' ? "Switch to English" : "切换到中文"}
                         >
                             <span className="text-sm font-bold font-mono">{language === 'zh' ? 'En' : 'Zh'}</span>
@@ -495,7 +646,7 @@ ${evaluation.analysis}
                             variant="ghost"
                             size="icon"
                             onClick={() => setTheme(theme === 'light' ? 'eye-care' : 'light')}
-                            className={theme === 'eye-care' ? "bg-amber-100/50 text-amber-900 hover:bg-amber-200/50 rounded-xl" : "text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"}
+                            className={theme === 'eye-care' ? "h-9 w-9 bg-amber-100/50 text-amber-900 hover:bg-amber-200/50 rounded-xl" : "h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"}
                             title={theme === 'light' ? "开启护眼模式" : "切换回白天模式"}
                         >
                             {theme === 'light' ? <BookOpen className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
@@ -551,7 +702,7 @@ ${evaluation.analysis}
               <main className="flex-1 flex overflow-hidden p-6 gap-6 pt-0">
                 {/* History Sidebar */}
                 <div className={`transition-all duration-300 ${showHistory ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
-                    <div className="h-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-sm border border-white/20 overflow-hidden">
+                    <div className="h-full bg-white/80 backdrop-blur-xl rounded-md dark:rounded-3xl shadow-sm border-[1.5px] border-black dark:border dark:border-white/20 overflow-hidden">
                         <HistorySidebar 
                             isOpen={true} // Always render internal logic if container is visible
                             sessions={graphSessions} 
@@ -563,8 +714,8 @@ ${evaluation.analysis}
                     </div>
                 </div>
 
-                <div className="flex-1 flex overflow-hidden bg-white/60 backdrop-blur-xl rounded-3xl shadow-sm border border-white/20">
-                    <ResizablePanelGroup orientation="horizontal" className="h-full w-full rounded-3xl">
+                <div className="flex-1 flex overflow-hidden bg-white/60 backdrop-blur-xl rounded-md dark:rounded-3xl shadow-sm border-[1.5px] border-black dark:border dark:border-white/20">
+                    <ResizablePanelGroup orientation="horizontal" className="h-full w-full rounded-md dark:rounded-3xl">
                         
                         {!isPlanView && teachingPlan && showPlanPanel && (
                             <>
@@ -579,7 +730,7 @@ ${evaluation.analysis}
                                             </CardHeader>
                                             <CardContent className="p-0 flex-1 overflow-hidden">
                                                 <ScrollArea className="h-full pr-4">
-                                                    <div className="text-sm text-foreground leading-relaxed">
+                                                    <div className="text-sm text-foreground leading-relaxed ai-content">
                                                         <ReactMarkdown 
                                                             remarkPlugins={[remarkGfm]}
                                                             components={{
@@ -656,7 +807,7 @@ ${evaluation.analysis}
                         
                         {(showGraphPanel || showIDE) && (
                             <>
-                                <ResizableHandle withHandle className="bg-transparent opacity-50 hover:opacity-100" />
+                                <ResizableHandle withHandle className="bg-black dark:bg-transparent opacity-80 dark:opacity-50 hover:opacity-100 w-[1.5px] relative z-10" />
                                 <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "40" : "60"} minSize="10">
                                     {showIDE ? (
                                         <IDEPanel />
@@ -667,9 +818,10 @@ ${evaluation.analysis}
                                                 onNodeClick={handleNodeClick} 
                                                 onNodeContextMenu={handleNodeContextMenu}
                                                 theme={theme}
+                                                onViewModeChange={setGraphViewMode}
                                             />
                                             <div className="absolute top-4 left-4 z-10 w-auto">
-                                                <Dashboard state={learnerState} graphData={graphData} />
+                                                <Dashboard state={learnerState} graphData={graphData} viewMode={graphViewMode} />
                                             </div>
                                             {!graphData && !isGenerating && (
                                                 <div className="absolute inset-0 flex flex-col bg-slate-50/50">
@@ -682,8 +834,8 @@ ${evaluation.analysis}
                                                     </div>
                                                     
                                                     <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground">
-                                                        <div className="bg-slate-100 p-4 rounded-full mb-4">
-                                                            <Sparkles className="w-8 h-8 text-slate-400" />
+                                                        <div className="mb-4">
+                                                            <Sparkles className="w-12 h-12 text-slate-800" strokeWidth={1.5} />
                                                         </div>
                                                         <h3 className="text-lg font-semibold text-slate-700 mb-2">
                                                             {t('app.dialog_title')}

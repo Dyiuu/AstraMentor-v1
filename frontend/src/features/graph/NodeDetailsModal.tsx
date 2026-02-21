@@ -12,10 +12,11 @@ interface NodeDetailsModalProps {
   node: any;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: () => void; // Callback to refresh graph/data
+  onUpdate: (updatedNode: any) => void; // Callback to refresh graph/data
+  onDelete?: (nodeId: string) => void; // 删除节点回调
 }
 
-export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen, onClose, onUpdate }) => {
+export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen, onClose, onUpdate, onDelete }) => {
   const { t } = useLanguage();
   const [weightA, setWeightA] = useState(0.0);
   const [weightB, setWeightB] = useState(0.8);
@@ -40,13 +41,30 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
             parseFloat(weightB.toString())
         );
         toast.success(t('node_modal.success'));
-        onUpdate();
+        onUpdate({
+           weight_A: parseFloat(weightA.toString()),
+           weight_B: parseFloat(weightB.toString()),
+           user_note: userNote
+        });
         onClose();
     } catch (error) {
         console.error(error);
         toast.error(t('node_modal.fail'));
     } finally {
         setIsLoading(false);
+    }
+  };
+
+  /**
+   * 删除节点前弹出确认，确认后调用 onDelete 回调
+   * NOTE: 使用 window.confirm 保持轻量，避免引入额外弹窗组件
+   */
+  const handleDelete = () => {
+    if (!onDelete) return;
+    const confirmed = window.confirm(t('node_modal.delete_confirm'));
+    if (confirmed) {
+      onDelete(node.id);
+      onClose();
     }
   };
 
@@ -104,7 +122,16 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex justify-between sm:justify-between">
+          {onDelete && (
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="mr-auto"
+            >
+              {t('node_modal.delete')}
+            </Button>
+          )}
           <Button type="submit" onClick={handleSave} disabled={isLoading}>
             {isLoading ? t('node_modal.saving') : t('node_modal.save')}
           </Button>

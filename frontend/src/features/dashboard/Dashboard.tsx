@@ -8,9 +8,10 @@ import type { GraphData } from '../../types';
 interface DashboardProps {
   state: LearnerState | null;
   graphData?: GraphData | null;
+  viewMode?: '2d' | '3d';
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ state, graphData }) => {
+const Dashboard: React.FC<DashboardProps> = ({ state, graphData, viewMode }) => {
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = React.useState(true);
   
@@ -48,12 +49,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state, graphData }) => {
 
   if (!displayState) return null;
 
+  const is3D = viewMode === '3d';
+
   return (
     <div className="flex flex-col gap-2 mb-4 pointer-events-auto">
       <div className="flex items-center">
         <button 
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 bg-white/50 hover:bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md transition-all"
+          className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-all ${
+            is3D 
+              ? 'text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10'
+              : 'text-slate-500 hover:text-slate-700 bg-white/50 hover:bg-white/80 backdrop-blur-sm'
+          }`}
         >
           {isOpen ? t('dashboard.collapse') : t('dashboard.expand')}
         </button>
@@ -61,22 +68,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state, graphData }) => {
       
       {isOpen && (
         <div className="flex gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <Card className="w-32 bg-white/80 backdrop-blur-md border-white/20 shadow-sm hover:bg-white/90 transition-colors">
+          <Card className={`w-32 backdrop-blur-md shadow-sm transition-colors ${
+            is3D 
+              ? 'bg-white/10 border-white/10 hover:bg-white/20' 
+              : 'bg-white/80 border-white/20 hover:bg-white/90'
+          }`}>
             <CardContent className="p-4 flex flex-col items-center justify-center">
-              <div className="text-xs font-medium text-muted-foreground mb-1">{t('dashboard.total')}</div>
-              <div className="text-2xl font-bold">{displayState.total}</div>
+              <div className={`text-xs font-medium mb-1 ${is3D ? 'text-slate-300' : 'text-muted-foreground'}`}>{t('dashboard.total')}</div>
+              <div className={`text-2xl font-bold ${is3D ? 'text-slate-100' : ''}`}>{displayState.total}</div>
             </CardContent>
           </Card>
-          <Card className="w-32 bg-white/80 backdrop-blur-md border-white/20 shadow-sm hover:bg-white/90 transition-colors">
+          <Card className={`w-32 backdrop-blur-md shadow-sm transition-colors ${
+            is3D 
+              ? 'bg-white/10 border-white/10 hover:bg-white/20' 
+              : 'bg-white/80 border-white/20 hover:bg-white/90'
+          }`}>
             <CardContent className="p-4 flex flex-col items-center justify-center">
-                <div className="text-xs font-medium text-muted-foreground mb-1">{t('dashboard.mastered')}</div>
-                <div className="text-2xl font-bold text-green-600">{displayState.mastered}</div>
+                <div className={`text-xs font-medium mb-1 ${is3D ? 'text-slate-300' : 'text-muted-foreground'}`}>{t('dashboard.mastered')}</div>
+                <div className={`text-2xl font-bold ${is3D ? 'text-emerald-400' : 'text-green-600'}`}>{displayState.mastered}</div>
             </CardContent>
           </Card>
-          <Card className="w-32 bg-white/80 backdrop-blur-md border-white/20 shadow-sm hover:bg-white/90 transition-colors">
+          <Card className={`w-32 backdrop-blur-md shadow-sm transition-colors ${
+            is3D 
+              ? 'bg-white/10 border-white/10 hover:bg-white/20' 
+              : 'bg-white/80 border-white/20 hover:bg-white/90'
+          }`}>
             <CardContent className="p-4 flex flex-col items-center justify-center">
-                <div className="text-xs font-medium text-muted-foreground mb-1">{t('dashboard.average_mastery')}</div>
-                <div className="text-2xl font-bold">{(displayState.average_mastery * 100).toFixed(1)}%</div>
+                <div className={`text-xs font-medium mb-1 ${is3D ? 'text-slate-300' : 'text-muted-foreground'}`}>{t('dashboard.average_mastery')}</div>
+                <div className={`text-2xl font-bold ${is3D ? 'text-slate-100' : ''}`}>{(displayState.average_mastery * 100).toFixed(1)}%</div>
             </CardContent>
           </Card>
         </div>

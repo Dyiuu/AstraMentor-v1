@@ -90,8 +90,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col items-center justify-center p-6 text-center text-muted-foreground bg-slate-50/50">
-                  <div className="bg-slate-100 p-4 rounded-full mb-4">
-                        <BookOpen className="w-8 h-8 text-slate-400" />
+                  <div className="mb-4">
+                        <BookOpen className="w-12 h-12 text-slate-800" strokeWidth={1.5} />
                   </div>
                   <h3 className="text-lg font-semibold text-slate-700 mb-2">
                       {t('chat.waiting_for_topic')}
@@ -132,7 +132,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       : 'bg-white/40 border border-white/20 text-foreground rounded-tl-none'
                   }`}
                 >
-                  <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+                  <div className="prose prose-sm dark:prose-invert max-w-none break-words ai-content">
                     <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}
                         components={{

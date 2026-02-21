@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Button } from '../../components/ui/button';
 import { MessageSquare, Calendar, ChevronRight, Trash2 } from 'lucide-react';
@@ -12,6 +12,7 @@ export interface GraphSession {
     topic: string;
     date: string;
     // We don't need full data here, just metadata for the list
+    averageMastery?: number; // 0-1
 }
 
 interface HistorySidebarProps {
@@ -68,9 +69,27 @@ export function HistorySidebar({
                                     )}>
                                         {session.topic}
                                     </span>
-                                    <div className="flex items-center text-xs text-muted-foreground gap-1">
+                                    <div className="flex items-center text-xs text-muted-foreground gap-1 mb-1">
                                         <Calendar className="w-3 h-3" />
                                         {formatDistanceToNow(new Date(session.date), { addSuffix: true, locale: language === 'zh' ? zhCN : enUS })}
+                                    </div>
+                                    
+                                    {/* Progress Bar */}
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex-1 h-1.5 bg-secondary/50 rounded-full overflow-hidden">
+                                            <div 
+                                                className={cn(
+                                                    "h-full rounded-full transition-all duration-500",
+                                                    (session.averageMastery || 0) >= 0.8 ? "bg-gradient-to-r from-emerald-400 to-green-500" :
+                                                    (session.averageMastery || 0) >= 0.5 ? "bg-gradient-to-r from-blue-400 to-indigo-500" :
+                                                    "bg-gradient-to-r from-amber-300 to-orange-400"
+                                                )}
+                                                style={{ width: `${Math.round((session.averageMastery || 0) * 100)}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-[10px] text-muted-foreground shrink-0">
+                                            {Math.round((session.averageMastery || 0) * 100)}%
+                                        </span>
                                     </div>
                                 </div>
                                 

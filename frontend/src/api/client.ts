@@ -90,5 +90,14 @@ export const api = {
             language
         });
         return response.data;
+    },
+
+    /** 将修改后的图谱数据保存到磁盘 JSON 文件 */
+    saveGraph: async (topic: string, graphData: any) => {
+        const response = await client.post<{ status: string }>('/graph/save', {
+            topic,
+            graph_data: graphData
+        });
+        return response.data;
     }
 };

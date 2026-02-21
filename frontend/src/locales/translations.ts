@@ -42,7 +42,14 @@ export const zh = {
      relation_strength: "关联强度",
      layout_vertical: "纵向",
      layout_horizontal: "横向",
-     fit_view: "定位"
+     fit_view: "定位",
+     mastery: "掌握度",
+     prerequisites: "前驱知识",
+     subsequent: "后续知识",
+     edges_on: "连线开",
+     edges_off: "连线关",
+     hide_edges: "隐藏星座连线",
+     show_edges: "显示星座连线"
   },
   dashboard: {
       total: "总知识点",
@@ -70,7 +77,10 @@ export const zh = {
       target_label: "期望目标 (B)",
       note_label: "备注",
       save: "保存修改",
-      saving: "保存中..."
+      saving: "保存中...",
+      delete: "删除节点",
+      delete_confirm: "确定要删除该节点吗？相关连线也会一并删除。",
+      delete_success: "节点已删除"
   }
 
 };
@@ -83,7 +93,14 @@ export const en = {
      relation_strength: "Strength",
      layout_vertical: "Vertical",
      layout_horizontal: "Horizontal",
-     fit_view: "Fit View"
+     fit_view: "Fit View",
+     mastery: "Mastery",
+     prerequisites: "Prerequisites",
+     subsequent: "Next Topics",
+     edges_on: "Edges On",
+     edges_off: "Edges Off",
+     hide_edges: "Hide Edges",
+     show_edges: "Show Edges"
   },
   dashboard: {
       total: "Total Nodes",
@@ -147,6 +164,9 @@ export const en = {
       target_label: "Target (B)",
       note_label: "Note",
       save: "Save Changes",
-      saving: "Saving..."
+      saving: "Saving...",
+      delete: "Delete Node",
+      delete_confirm: "Are you sure? Related edges will also be removed.",
+      delete_success: "Node deleted"
   }
 };

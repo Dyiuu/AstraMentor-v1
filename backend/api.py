@@ -9,7 +9,8 @@ from backend.models import (
     EvaluationResponse,
     UpdateNodeRequest,
     RunCodeRequest,
-    RunCodeResponse
+    RunCodeResponse,
+    SaveGraphRequest
 )
 
 from services.code_runner import CodeRunner
@@ -36,6 +37,14 @@ async def generate_graph(request: GenerateGraphRequest, service: LearningService
     if not graph:
         raise HTTPException(status_code=500, detail="Failed to generate knowledge graph")
     return graph
+
+@router.post("/graph/save")
+async def save_graph(request: SaveGraphRequest, service: LearningService = Depends(get_service)):
+    """将修改后的图谱数据写回磁盘"""
+    success = service.save_graph(topic=request.topic, graph_data=request.graph_data)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save graph")
+    return {"status": "success"}
 
 @router.get("/state")
 async def get_state(service: LearningService = Depends(get_service)):

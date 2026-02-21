@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@antv/g6": "^5.0.51",
+    "@antv/g6-extension-3d": "^0.1.22",
     "@antv/hierarchy": "^0.7.1",
     "@antv/layout": "^1.2.14-beta.8",
     "@monaco-editor/react": "^4.7.0",
