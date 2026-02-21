@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Google_AI-Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/License-AGPL%20v3-blue?style=for-the-badge" alt="License">
 </p>
 
 <h1 align="center">🌟 AstraMentor</h1>
@@ -230,7 +230,7 @@ AstraMentor-v1/
 
 ## 📝 许可证 (License)
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目基于 [AGPL v3 License](LICENSE) 开源。
 
 ---
 

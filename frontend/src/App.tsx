@@ -75,6 +75,7 @@ function App() {
   const [showGraphPanel, setShowGraphPanel] = useState(true);
   const [showIDE, setShowIDE] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
+  const [previousGraphState, setPreviousGraphState] = useState(true);
   
   // Theme State
   const [theme, setTheme] = useState<'light' | 'eye-care'>('light');
@@ -85,10 +86,11 @@ function App() {
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('eye-care', 'dark');
-    if (theme === 'eye-care') {
+    // NOTE: 强制主页始终使用纯净的白天模式，不随子页的主题状态变化
+    if (!showLanding && theme === 'eye-care') {
       root.classList.add('eye-care');
     }
-  }, [theme]);
+  }, [theme, showLanding]);
 
   // History Sessions
   const [graphSessions, setGraphSessions] = useState<FullGraphSession[]>([]);
@@ -668,8 +670,14 @@ ${evaluation.analysis}
                             variant={showIDE ? "secondary" : "ghost"}
                             size="sm"
                             onClick={() => {
-                                setShowIDE(!showIDE);
-                                if (!showIDE) setShowGraphPanel(false); 
+                                if (!showIDE) {
+                                    setPreviousGraphState(showGraphPanel);
+                                    setShowIDE(true);
+                                    setShowGraphPanel(false);
+                                } else {
+                                    setShowIDE(false);
+                                    setShowGraphPanel(previousGraphState);
+                                }
                             }}
                             className={showIDE ? "bg-white shadow-sm text-green-700 rounded-xl" : "text-muted-foreground hover:bg-white/50 rounded-xl"}
                             title="Open Code Editor"
