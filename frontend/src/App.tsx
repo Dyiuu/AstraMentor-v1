@@ -827,6 +827,7 @@ ${evaluation.analysis}
                                                 onNodeContextMenu={handleNodeContextMenu}
                                                 theme={theme}
                                                 onViewModeChange={setGraphViewMode}
+                                                initialViewMode={graphViewMode}
                                             />
                                             <div className="absolute top-4 left-4 z-10 w-auto">
                                                 <Dashboard state={learnerState} graphData={graphData} viewMode={graphViewMode} />

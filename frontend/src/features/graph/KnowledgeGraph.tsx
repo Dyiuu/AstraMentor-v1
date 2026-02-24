@@ -22,6 +22,7 @@ interface KnowledgeGraphProps {
   onNodeContextMenu?: (event: React.MouseEvent, node: any) => void;
   theme?: 'light' | 'eye-care' | 'dark';
   onViewModeChange?: (mode: '2d' | '3d') => void;
+  initialViewMode?: '2d' | '3d';
 }
 
 /**
@@ -166,7 +167,7 @@ const clearHighlight = (graph: Graph) => {
   }
 };
 
-const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNodeContextMenu, theme, onViewModeChange }) => {
+const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNodeContextMenu, theme, onViewModeChange, initialViewMode }) => {
   const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -180,7 +181,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
   const labelsRafRef = useRef<number>(0);
   const [layoutType, setLayoutType] = useState<'TB' | 'LR'>('TB');
   // NOTE: 2D/3D 视图模式切换
-  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>(initialViewMode || '2d');
   // NOTE: 3D 模式下默认关闭连线
   const [show3DEdges, setShow3DEdges] = useState(false);
   const [selectedEdgeInfo, setSelectedEdgeInfo] = useState<{
@@ -191,7 +192,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
     y: number;
   } | null>(null);
   // NOTE: 3D 模式下 hover 节点的 tooltip 信息（含父子关系）
-  const [hoveredNode, setHoveredNode] = useState<{
+  const [_hoveredNode, setHoveredNode] = useState<{
     name: string;
     x: number;
     y: number;
@@ -219,17 +220,13 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
    * 同时计算每个节点和边的视觉样式参数
    */
   const transformData = useCallback((graphData: GraphData) => {
-    const themeColors = getThemeColors(theme);
-
     // NOTE: 所有业务属性放入 _attrs，样式信息用下划线前缀
     // 避免 dagre 布局算法误读 weight 等字段
-    const nodes = graphData.nodes.map((n) => {
+      const nodes = graphData.nodes.map((n) => {
       const weightA = n.attributes?.weight_A ?? 0;
-        const mastery = weightA > 0
-          ? getMasteryColor(weightA, theme)
-          : { fill: themeColors.defaultFill, stroke: themeColors.defaultStroke, shadowColor: themeColors.shadowColor };
+      const mastery = getMasteryColor(weightA, theme);
 
-        return {
+      return {
           id: n.id,
           data: {
             label: n.name,
@@ -1284,22 +1281,13 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
       {/* 工具栏 */}
       {data && (
         <div
-          className={`backdrop-blur-md ${
-            viewMode === '3d' 
-              ? 'bg-slate-800/80 border-slate-700/50' 
-              : 'bg-white/80 dark:bg-slate-800/80'
-          }`}
           style={{
             position: 'absolute',
             top: 16,
             right: 16,
             zIndex: 10,
             display: 'flex',
-            gap: 2,
-            borderRadius: 12,
-            padding: 3,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            border: '1px solid rgba(0,0,0,0.06)',
+            gap: 8,
           }}
         >
           {/* 2D 模式专属：布局切换按钮 */}
@@ -1330,9 +1318,6 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
                 </button>
               ))}
 
-              {/* 分隔线 */}
-              <div style={{ width: 1, height: 20, background: 'rgba(0,0,0,0.1)', margin: '0 4px', alignSelf: 'center' }} />
-
               {/* 一键定位按钮 */}
               <button
                 onClick={(e) => { e.stopPropagation(); handleFitView(); }}
@@ -1359,9 +1344,6 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
               >
                 ⊙ {t('graph.fit_view')}
               </button>
-
-              {/* 分隔线 */}
-              <div style={{ width: 1, height: 20, background: 'rgba(0,0,0,0.1)', margin: '0 4px', alignSelf: 'center' }} />
             </>
           )}
 
@@ -1387,9 +1369,6 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
               >
                 🕸️ {show3DEdges ? t('graph.edges_on') : t('graph.edges_off')}
               </button>
-
-              {/* 分隔线 */}
-              <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.2)', margin: '0 4px', alignSelf: 'center' }} />
             </>
           )}
 
