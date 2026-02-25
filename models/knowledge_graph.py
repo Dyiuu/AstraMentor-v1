@@ -76,3 +76,14 @@ class KnowledgeGraph(BaseModel):
     links: list[KnowledgeLink] = Field(
         default_factory=list, description="知识依赖关系列表"
     )
+
+
+class ExpandGraphResult(BaseModel):
+    """图谱扩展结果：仅包含新增的节点和连接"""
+
+    new_nodes: list[KnowledgeNode] = Field(
+        default_factory=list, description="新增知识节点列表（含中间过渡节点和目标节点）"
+    )
+    new_links: list[KnowledgeLink] = Field(
+        default_factory=list, description="新增知识依赖关系列表（连接新旧节点）"
+    )

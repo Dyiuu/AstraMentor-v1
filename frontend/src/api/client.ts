@@ -99,5 +99,28 @@ export const api = {
             graph_data: graphData
         });
         return response.data;
+    },
+
+    /**
+     * 在已有图谱上扩展新知识节点
+     * AI 会自动生成中间过渡节点并建立递进层次连接
+     */
+    expandGraph: async (
+        topic: string,
+        newNodeName: string,
+        currentMastery: number,
+        targetMastery: number,
+        userNote: string,
+        existingGraph: GraphData
+    ) => {
+        const response = await client.post<GraphData>('/graph/expand', {
+            topic,
+            new_node_name: newNodeName,
+            current_mastery: currentMastery,
+            target_mastery: targetMastery,
+            user_note: userNote,
+            existing_graph: existingGraph
+        });
+        return response.data;
     }
 };

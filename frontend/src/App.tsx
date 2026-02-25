@@ -4,6 +4,7 @@ import { api } from './api/client';
 import type { GraphData, LearnerState, ChatMessage } from './types';
 import KnowledgeGraph from './features/graph/KnowledgeGraph';
 import { NodeDetailsModal } from './features/graph/NodeDetailsModal';
+import { AddNodeDialog } from './features/graph/AddNodeDialog';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -12,7 +13,7 @@ import ChatInterface from './features/chat/ChatInterface';
 import Dashboard from './features/dashboard/Dashboard';
 import HomePage from './features/home/HomePage';
 import { Button } from './components/ui/button';
-import { Search, Loader2, Book, Menu, Sun, BookOpen, Code, Sparkles } from 'lucide-react';
+import { Search, Loader2, Book, Menu, Sun, BookOpen, Code, Sparkles, Plus } from 'lucide-react';
 import { IDEPanel } from './features/ide/IDEPanel';
 import { GenerateGraphDialog } from './features/graph/GenerateGraphDialog';
 import { ScrollArea } from './components/ui/scroll-area';
@@ -63,6 +64,8 @@ function App() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [contextMenuNode, setContextMenuNode] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddNodeDialogOpen, setIsAddNodeDialogOpen] = useState(false);
+  const [isAddingNode, setIsAddingNode] = useState(false);
   const [showLanding, setShowLanding] = useState(!graphData); // Show landing if no graph active
 
  
@@ -308,6 +311,53 @@ function App() {
       console.error(error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  /**
+   * 处理用户手动添加节点请求
+   * NOTE: 调用后端 AI 扩展 API，生成中间过渡节点并融入现有图谱
+   */
+  const handleAddNode = async (name: string, currentMastery: number, targetMastery: number, note: string) => {
+    if (!graphData || !currentTopic) return;
+
+    setIsAddingNode(true);
+    try {
+      toast.info(t('add_node.adding'));
+      const mergedGraph = await api.expandGraph(
+        currentTopic,
+        name,
+        currentMastery,
+        targetMastery,
+        note,
+        graphData
+      );
+
+      // 更新前端图谱状态
+      setGraphData(mergedGraph);
+
+      // 同步更新历史会话列表
+      setGraphSessions(prev =>
+        prev.map(s => {
+          if (s.id !== currentSessionId) return s;
+          return {
+            ...s,
+            graphData: mergedGraph,
+            averageMastery: calculateAverageMastery(mergedGraph.nodes),
+          };
+        })
+      );
+
+      // 刷新学习状态数据
+      await loadState();
+
+      setIsAddNodeDialogOpen(false);
+      toast.success(t('add_node.success'));
+    } catch (error) {
+      console.error('Failed to expand graph:', error);
+      toast.error(t('add_node.fail'));
+    } finally {
+      setIsAddingNode(false);
     }
   };
 
@@ -701,10 +751,22 @@ ${evaluation.analysis}
                     </div>
                 </div>
 
-                <Button onClick={() => setIsDialogOpen(true)} className="bg-primary/80 hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl px-6">
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    {t('app.generate_btn')}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {graphData && (
+                    <Button
+                      onClick={() => setIsAddNodeDialogOpen(true)}
+                      variant="outline"
+                      className="shadow-md hover:shadow-lg transition-all duration-300 rounded-xl px-5 border-emerald-300 text-black hover:bg-emerald-50 hover:border-emerald-400"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      {t('add_node.btn')}
+                    </Button>
+                  )}
+                  <Button onClick={() => setIsDialogOpen(true)} className="bg-primary/80 hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl px-6">
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      {t('app.generate_btn')}
+                  </Button>
+                </div>
               </header>
 
               <main className="flex-1 flex overflow-hidden p-6 gap-6 pt-0">
@@ -886,6 +948,13 @@ ${evaluation.analysis}
           isGenerating={isGenerating}
           onGenerate={handleGenerateGraph}
           t={t}
+       />
+       <AddNodeDialog
+         open={isAddNodeDialogOpen}
+         onOpenChange={setIsAddNodeDialogOpen}
+         isAdding={isAddingNode}
+         onAdd={handleAddNode}
+         t={t}
        />
        <Toaster />
     </div>

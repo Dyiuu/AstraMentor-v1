@@ -10,7 +10,8 @@ from backend.models import (
     UpdateNodeRequest,
     RunCodeRequest,
     RunCodeResponse,
-    SaveGraphRequest
+    SaveGraphRequest,
+    AddNodeRequest
 )
 
 from services.code_runner import CodeRunner
@@ -45,6 +46,27 @@ async def save_graph(request: SaveGraphRequest, service: LearningService = Depen
     if not success:
         raise HTTPException(status_code=500, detail="Failed to save graph")
     return {"status": "success"}
+
+@router.post("/graph/expand")
+async def expand_graph(request: AddNodeRequest, service: LearningService = Depends(get_service)):
+    """
+    在已有图谱上扩展新知识节点
+
+    AI 会自动生成中间过渡节点并建立递进层次连接，
+    合并后的完整图谱会同步持久化到磁盘。
+    """
+    try:
+        merged_graph = service.expand_graph(
+            topic=request.topic,
+            existing_graph_data=request.existing_graph,
+            new_node_name=request.new_node_name,
+            current_mastery=request.current_mastery,
+            target_mastery=request.target_mastery,
+            user_note=request.user_note,
+        )
+        return merged_graph
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to expand graph: {str(e)}")
 
 @router.get("/state")
 async def get_state(service: LearningService = Depends(get_service)):

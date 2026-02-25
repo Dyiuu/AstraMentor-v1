@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Any, List
 
 from utils.api_client import APIClient
-from models.knowledge_graph import KnowledgeGraph
+from models.knowledge_graph import KnowledgeGraph, ExpandGraphResult
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,38 @@ class KnowledgeGraphAgent:
 - 循序渐进：确保学习路径符合认知规律（先易后难）
 - 严格层级：尽量只连接相邻或相近层级的节点，避免跨越大层级的"长连接"（例如不要从基础概念直接连到高级应用，中间应有进阶概念过渡）
 - 树状结构：倾向于生成类似二叉树或多叉树的结构，减少网状交叉
+"""
+
+    # NOTE: 图谱扩展专用提示词
+    # 与初始生成不同，扩展需要在已有图谱基础上自然过渡到新节点
+    EXPAND_SYSTEM_INSTRUCTION = """你是一位专业的知识星图架构师，负责在已有知识图谱上扩展新知识节点。
+
+你的任务是：分析已有图谱结构，将用户指定的新知识节点自然地融入图谱中。
+
+核心原则：
+1. **自然过渡**：如果新节点与已有节点之间存在知识跨度，必须生成适当数量的中间过渡节点来桥接。不要限制数量，以能从已有节点自然递进到新节点为准。
+2. **递进层次**：所有连接只在相邻或相近层级之间建立，严禁跨越大层级的长连接。
+3. **融入已有结构**：新增连接必须与已有图谱的某些节点建立关系（source 或 target 使用已有节点ID），不能孤立存在。
+4. **保持 DAG**：确保新增连接不会引入环路（有向无环图）。
+5. **避免冗余**：不要生成与已有节点重复或高度相似的知识点。
+
+输出要求（ExpandGraphResult 格式）：
+- new_nodes: 所有新增节点列表（包括中间过渡节点和用户指定的目标节点）
+  - id: 唯一标识符，使用 "expand_node_1", "expand_node_2" 格式，避免与已有 ID 冲突
+  - name: 知识点名称（简洁明确）
+  - attributes.weight_A: 用户的当前掌握度（对中间过渡节点，参考用户对相邻已有节点的掌握度合理推断）
+  - attributes.weight_B: 期望掌握度（对中间过渡节点，根据学习路径重要性合理设置）
+  - attributes.description: 1-2句话描述该知识点的核心内容
+  - attributes.user_note: 留空
+- new_links: 所有新增连接列表
+  - source/target 可以混合使用已有节点ID和新增节点ID
+  - reason: 清晰说明依赖关系
+  - weight: 关联强度（0.0-1.0）
+
+重要提醒：
+- 用户指定的目标节点必须包含在 new_nodes 中（使用用户提供的名称和参数）
+- 中间过渡节点的数量完全取决于知识跨度，可能是 0 个也可能是多个
+- 优先与已有图谱中掌握度较高或主题最相关的节点建立连接
 """
 
     def __init__(self, api_client: APIClient):
@@ -104,6 +136,69 @@ class KnowledgeGraphAgent:
 
         except Exception as e:
             logger.error(f"❌ 知识星图生成失败: {e}")
+            raise
+
+    def expand_graph(
+        self,
+        existing_graph_data: Dict[str, Any],
+        new_node_name: str,
+        current_mastery: float = 0.0,
+        target_mastery: float = 0.8,
+        user_note: str = "",
+    ) -> Dict[str, Any]:
+        """
+        在已有图谱基础上扩展新节点
+
+        AI 会分析已有结构，生成适当的中间过渡节点，
+        并建立与原图谱的递进层次连接。
+
+        Args:
+            existing_graph_data: 当前完整图谱数据
+            new_node_name: 用户要添加的目标节点名称
+            current_mastery: 用户对该节点的当前掌握度
+            target_mastery: 期望掌握度
+            user_note: 用户备注
+
+        Returns:
+            扩展结果字典（包含 new_nodes 和 new_links）
+        """
+        import json
+
+        # NOTE: 将已有图谱序列化后传给 AI，让它了解当前结构
+        existing_summary = json.dumps(existing_graph_data, ensure_ascii=False, indent=2)
+
+        prompt = f"""已有知识图谱结构如下：
+{existing_summary}
+
+用户要添加的新知识节点：
+- 名称：{new_node_name}
+- 当前掌握度（weight_A）：{current_mastery}
+- 期望掌握度（weight_B）：{target_mastery}
+- 用户备注：{user_note if user_note else "无"}
+
+请分析已有图谱，将这个新节点自然融入其中。如果新节点与已有节点之间存在知识跨度，请生成适当的中间过渡节点来桥接。"""
+
+        logger.info(f"正在扩展图谱，添加节点 '{new_node_name}'...")
+
+        try:
+            expand_result = self.api_client.generate_json(
+                prompt=prompt,
+                system_instruction=self.EXPAND_SYSTEM_INSTRUCTION,
+                temperature=0.7,
+                output_schema=ExpandGraphResult,
+            )
+
+            result_data = expand_result.model_dump()
+
+            new_node_count = len(result_data.get("new_nodes", []))
+            new_link_count = len(result_data.get("new_links", []))
+            logger.info(
+                f"✅ 图谱扩展成功，新增 {new_node_count} 个节点、{new_link_count} 条连接"
+            )
+            return result_data
+
+        except Exception as e:
+            logger.error(f"❌ 图谱扩展失败: {e}")
             raise
 
     def get_learning_path(self, graph_data: Dict[str, Any]) -> List[str]:

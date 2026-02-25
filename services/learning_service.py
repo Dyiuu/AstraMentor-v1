@@ -74,6 +74,75 @@ class LearningService:
             logger.error(f"Failed to save graph: {e}")
             return False
 
+    def expand_graph(
+        self,
+        topic: str,
+        existing_graph_data: Dict[str, Any],
+        new_node_name: str,
+        current_mastery: float = 0.0,
+        target_mastery: float = 0.8,
+        user_note: str = "",
+    ) -> Dict[str, Any]:
+        """
+        在已有图谱基础上扩展新节点
+
+        调用 AI 生成中间过渡节点和连接，合并到现有图谱后持久化。
+
+        Args:
+            topic: 学习主题（用于定位磁盘 JSON 文件）
+            existing_graph_data: 当前完整图谱数据
+            new_node_name: 用户要添加的目标节点名称
+            current_mastery: 当前掌握度
+            target_mastery: 期望掌握度
+            user_note: 用户备注
+
+        Returns:
+            合并后的完整图谱数据
+
+        Raises:
+            Exception: AI 生成失败或数据合并异常时抛出
+        """
+        # NOTE: 调用 KnowledgeGraphAgent 的 expand_graph 获取 AI 生成的扩展结果
+        expand_result = self.knowledge_graph.expand_graph(
+            existing_graph_data=existing_graph_data,
+            new_node_name=new_node_name,
+            current_mastery=current_mastery,
+            target_mastery=target_mastery,
+            user_note=user_note,
+        )
+
+        new_nodes = expand_result.get("new_nodes", [])
+        new_links = expand_result.get("new_links", [])
+
+        # NOTE: 去重校验——避免与已有节点 ID 冲突
+        existing_node_ids = {n["id"] for n in existing_graph_data.get("nodes", [])}
+        filtered_nodes = [n for n in new_nodes if n["id"] not in existing_node_ids]
+
+        # NOTE: 合并新节点和连接到已有图谱
+        merged_graph = {
+            **existing_graph_data,
+            "nodes": existing_graph_data.get("nodes", []) + filtered_nodes,
+            "links": existing_graph_data.get("links", []) + new_links,
+        }
+
+        # NOTE: 为每个新增节点在 LearnerState 中注册知识点
+        for node in filtered_nodes:
+            attrs = node.get("attributes", {})
+            self.learner_state.add_knowledge_point(
+                name=node["name"],
+                target_mastery=attrs.get("weight_B", 0.8),
+                note=attrs.get("user_note", ""),
+                initial_mastery=attrs.get("weight_A", 0.0),
+            )
+
+        # NOTE: 持久化合并后的完整图谱到磁盘
+        self.save_graph(topic=topic, graph_data=merged_graph)
+
+        logger.info(
+            f"图谱扩展并持久化完成: 新增 {len(filtered_nodes)} 个节点、{len(new_links)} 条连接"
+        )
+        return merged_graph
+
     def get_knowledge_point(self, name: str) -> Optional[KnowledgePoint]:
         """Retrieves a knowledge point by name."""
         return self.learner_state.get_knowledge_point(name)

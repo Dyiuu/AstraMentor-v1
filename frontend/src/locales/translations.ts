@@ -81,6 +81,21 @@ export const zh = {
       delete: "删除节点",
       delete_confirm: "确定要删除该节点吗？相关连线也会一并删除。",
       delete_success: "节点已删除"
+  },
+  add_node: {
+    btn: "添加节点",
+    title: "添加知识节点",
+    desc: "AI 将智能生成过渡节点并建立与现有星图的关联",
+    name_label: "节点名称",
+    name_placeholder: "例如：装饰器模式",
+    mastery_label: "当前掌握度",
+    target_label: "期望掌握度",
+    note_label: "备注（可选）",
+    note_placeholder: "关于这个知识点的备注...",
+    submit: "AI 智能添加",
+    adding: "正在智能扩展星图...",
+    success: "节点添加成功",
+    fail: "节点添加失败"
   }
 
 };
@@ -168,5 +183,20 @@ export const en = {
       delete: "Delete Node",
       delete_confirm: "Are you sure? Related edges will also be removed.",
       delete_success: "Node deleted"
+  },
+  add_node: {
+    btn: "Add Node",
+    title: "Add Knowledge Node",
+    desc: "AI will generate transitional nodes and establish connections with the existing graph",
+    name_label: "Node Name",
+    name_placeholder: "e.g., Decorator Pattern",
+    mastery_label: "Current Mastery",
+    target_label: "Target Mastery",
+    note_label: "Note (optional)",
+    note_placeholder: "Notes about this knowledge point...",
+    submit: "AI Smart Add",
+    adding: "Expanding graph...",
+    success: "Node added successfully",
+    fail: "Failed to add node"
   }
 };

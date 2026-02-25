@@ -55,3 +55,13 @@ class RunCodeResponse(BaseModel):
     output: str
     error: str
     exit_code: int
+
+
+class AddNodeRequest(BaseModel):
+    """图谱扩展请求：用户手动添加知识节点"""
+    topic: str
+    new_node_name: str
+    current_mastery: float = 0.0
+    target_mastery: float = 0.8
+    user_note: str = ""
+    existing_graph: Dict[str, Any]
