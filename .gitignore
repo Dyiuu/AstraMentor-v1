@@ -2,19 +2,15 @@
 # Python
 # =====================================================
 
-# Byte-compiled / optimized / DLL files
+# 字节编译 / 优化 / DLL 文件
 __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
+# C 扩展
 *.so
 
-
-# test data that should be ignored
-test_data/
-
-# Distribution / packaging
+# 打包 / 分发
 .Python
 build/
 develop-eggs/
@@ -22,7 +18,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# NOTE: 不忽略顶层 lib/，因为 frontend/src/lib/ 包含项目源码
 lib64/
 parts/
 sdist/
@@ -36,11 +32,11 @@ wheels/
 *.manifest
 *.spec
 
-# Installer logs
+# 安装器日志
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# 单元测试 / 覆盖率报告
 htmlcov/
 .tox/
 .nox/
@@ -55,22 +51,32 @@ coverage.xml
 .pytest_cache/
 
 # =====================================================
-# Virtual Environments
+# Node.js / 前端
+# =====================================================
+
+node_modules/
+*.local
+
+# 前端构建日志（临时文件，不纳入版本控制）
+frontend/build.log
+frontend/build_errors*.log
+frontend/tsc_output.txt
+
+# =====================================================
+# 虚拟环境
 # =====================================================
 .venv/
 venv/
 ENV/
-env/
-.env/
 
 # =====================================================
-# IDE / Editor
+# IDE / 编辑器
 # =====================================================
 
 # VSCode
 .vscode/
 
-# PyCharm
+# PyCharm / JetBrains
 .idea/
 *.iml
 *.ipr
@@ -83,7 +89,6 @@ env/
 # Vim
 *.swp
 *.swo
-*~
 
 # Emacs
 *~
@@ -92,11 +97,14 @@ env/
 /.emacs.desktop.lock
 
 # =====================================================
-# Project Specific
+# 项目特定
 # =====================================================
 
 # 学习状态文件（包含用户学习进度，不上传）
 learner_state.json
+
+# 测试数据
+test_data/
 
 # 日志文件
 *.log
@@ -109,15 +117,15 @@ logs/
 Thumbs.db
 
 # =====================================================
-# Secrets / Credentials
+# 密钥 / 凭证
 # =====================================================
 
-# 环境变量文件
+# 环境变量文件（.env.example 应上传作为模板）
 .env
 .env.local
 .env.*.local
 
-# API密钥（如果有单独的配置文件）
+# API 密钥配置
 secrets.py
 credentials.json
 *.pem
