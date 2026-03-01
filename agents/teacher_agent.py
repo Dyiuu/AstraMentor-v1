@@ -121,7 +121,7 @@ class TeacherAgent:
         teaching_content = self.api_client.generate(
             prompt=user_prompt,
             system_instruction=system_instruction,
-            temperature=0.7,
+            temperature=0.4,
             max_tokens=2500
 
         )
@@ -265,7 +265,7 @@ class TeacherAgent:
             prompt=prompt,
             image=image,
             system_instruction=system_instruction,
-            temperature=0.7,
+            temperature=0.5,
             max_tokens=1500
         )
         

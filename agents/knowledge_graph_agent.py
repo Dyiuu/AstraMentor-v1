@@ -124,7 +124,7 @@ class KnowledgeGraphAgent:
             graph_model = self.api_client.generate_json(
                 prompt=prompt,
                 system_instruction=self.SYSTEM_INSTRUCTION,
-                temperature=0.7,
+                temperature=0.2,
                 output_schema=KnowledgeGraph,
             )
 
@@ -184,7 +184,7 @@ class KnowledgeGraphAgent:
             expand_result = self.api_client.generate_json(
                 prompt=prompt,
                 system_instruction=self.EXPAND_SYSTEM_INSTRUCTION,
-                temperature=0.7,
+                temperature=0.2,
                 output_schema=ExpandGraphResult,
             )
 
