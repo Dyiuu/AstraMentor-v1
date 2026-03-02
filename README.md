@@ -81,6 +81,19 @@
 - **可调节布局**: 面板宽度随意拖拽，配合柔和的响应式动态组件。
 
 </td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🔍 联网搜索增强 (Web Research)
+
+- **实时搜索**: 教学和讨论环节自动通过 DuckDuckGo 搜索引擎获取最新资料
+- **搜索来源展示**: AI 回复下方展示可点击的搜索来源卡片，方便追溯原文
+- **星图智能预研**: 生成知识图谱和扩展节点时先搜索最新知识结构，让图谱更准确
+- **零配置**: 默认启用，可通过 `.env` 中 `ASTRA_WEB_SEARCH_ENABLED=false` 关闭
+- **容错回退**: 搜索失败时自动回退到无搜索模式，不影响正常功能
+
+</td>
 <td width="50%">
 
 ### 🧠 多 Agent 协同架构
@@ -112,9 +125,15 @@ graph TD
     end
 
     subgraph "AI Models"
-        KA --> Gemini[Google Gemini Pro]
+        KA --> Gemini[Google Gemini]
         TA --> Gemini
         EA --> Gemini
+    end
+
+    subgraph "Web Research"
+        TA --> DDG[DuckDuckGo 搜索]
+        KA --> DDG
+        DDG --> Sources[搜索来源引用]
     end
 ```
 
@@ -152,6 +171,8 @@ pip install -r requirements.txt
 # 4. 配置环境变量
 # 复制 .env.example 为 .env，填入你的 GOOGLE_API_KEY
 copy .env.example .env
+# 可选：关闭联网搜索功能
+# 在 .env 中设置 ASTRA_WEB_SEARCH_ENABLED=false
 
 # 5. 启动后端服务
 uvicorn backend.app:app --reload
@@ -204,6 +225,9 @@ AstraMentor-v1/
 │   ├── app.py                 # 应用入口
 │   └── models.py              # Pydantic 数据模型
 ├── 📂 core/                    # 核心逻辑 (Prompts, Scoring, State)
+├── 📂 utils/                   # 工具模块
+│   ├── api_client.py          # Google GenAI SDK 客户端
+│   └── web_research.py        # 联网搜索 (DuckDuckGo)
 ├── 📂 frontend/                # React 前端代码
 │   ├── src/
 │   │   ├── features/chat/     # 聊天与互动组件
@@ -211,6 +235,7 @@ AstraMentor-v1/
 │   │   └── api/               # Axios API 客户端
 ├── 📂 services/                # 业务逻辑层 (连接 API 与 Agents)
 ├── 📂 user_data/               # 用户学习数据持久化目录
+├── config.py                   # 应用配置（含 Web Search 开关）
 ├── requirements.txt            # Python 依赖列表
 └── README.md                   # 项目文档
 ```

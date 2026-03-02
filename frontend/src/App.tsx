@@ -28,6 +28,7 @@ interface NodeSessionState {
   teachingPlan: string | null;
   isPlanView: boolean;
   showPlanPanel: boolean; 
+  lessonStarted: boolean;
 }
 
 interface FullGraphSession extends GraphSession {
@@ -430,14 +431,14 @@ function App() {
                 chatMessages,
                 teachingPlan,
                 isPlanView,
-                showPlanPanel 
+                showPlanPanel,
+                lessonStarted
             }
         }));
     }
 
     // 2. Switch to new node
     setSelectedNode({ id: nodeId, name: nodeName, attributes });
-    setLessonStarted(false); // fresh node, lesson not started
 
     // 3. Load saved session state or reset
     if (selectedNode?.id === nodeId) return; 
@@ -448,11 +449,14 @@ function App() {
         setChatMessages(savedSession.chatMessages);
         setTeachingPlan(savedSession.teachingPlan);
         setIsPlanView(savedSession.isPlanView);
+        setShowPlanPanel(savedSession.showPlanPanel);
+        setLessonStarted(savedSession.lessonStarted);
     } else {
         // New session
         setChatMessages([]);
         setTeachingPlan(null); // Reset plan
         setIsPlanView(false);
+        setLessonStarted(false); // fresh node, lesson not started
     }
   };
 
@@ -506,7 +510,11 @@ function App() {
         // 1. Start teaching
         const lessonResponse = await api.startLesson(selectedNode.name);
         setChatMessages([
-            { role: 'assistant', content: lessonResponse.content }
+            {
+                role: 'assistant',
+                content: lessonResponse.content,
+                sources: lessonResponse.sources || [],
+            }
         ]);
 
         // 2. Ask for confirmation instead of immediate quiz
@@ -667,7 +675,11 @@ ${evaluation.analysis}
           }));
 
           const response = await api.chat(selectedNode.name, message, history, image);
-          setChatMessages(prev => [...prev, { role: 'assistant', content: response.response }]);
+          setChatMessages(prev => [...prev, {
+            role: 'assistant',
+            content: response.response,
+            sources: response.sources || [],
+          }]);
       }
     } catch (error) {
       toast.error('Failed to send message');

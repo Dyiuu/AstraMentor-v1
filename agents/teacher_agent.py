@@ -5,7 +5,7 @@ Teacher Agent 模块
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any, List, Union
 
 from pydantic import BaseModel
 
@@ -16,6 +16,7 @@ from core.prompts import (
     get_question_prompt
 )
 from utils.api_client import APIClient
+from config import get_config
 
 
 logger = logging.getLogger(__name__)
@@ -87,49 +88,72 @@ class TeacherAgent:
         self,
         knowledge_point: KnowledgePoint,
         context: str = ""
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
         进行教学
         
-        根据知识点的掌握程度选择合适的教学风格
+        根据知识点的掌握程度选择合适的教学风格。
+        当 Web Research 开启时，会启用 Google Search Grounding
+        以获取最新资料并在讲解中自动引用来源。
         
         Args:
             knowledge_point: 知识点对象
             context: 额外的上下文信息
             
         Returns:
-            教学内容
+            包含 content 和 sources 的字典
         """
-        # 获取教学阶段
         stage = knowledge_point.get_teaching_stage()
         
-        # 获取对应阶段的教学提示词
         system_instruction = get_teaching_prompt(
             stage=stage,
             topic=knowledge_point.name,
             current_score=knowledge_point.actual_mastery
         )
         
-        # 构建用户提示
         user_prompt = f"请讲解知识点：{knowledge_point.name}"
         if knowledge_point.note:
             user_prompt += f"\n\n用户备注：{knowledge_point.note}"
         if context:
             user_prompt += f"\n\n补充说明：{context}"
         
-        # 生成教学内容
-        teaching_content = self.api_client.generate(
-            prompt=user_prompt,
-            system_instruction=system_instruction,
-            temperature=0.4,
-            max_tokens=2500
-
-        )
-        
-        logger.info(
-            f"已完成知识点 '{knowledge_point.name}' 的阶段{stage}教学"
-        )
-        return teaching_content
+        # NOTE: 根据配置决定是否启用联网搜索
+        config = get_config()
+        if config.api.web_search_enabled:
+            # 启用 Google Search Grounding，获取最新资料
+            search_instruction = system_instruction + "\n\n【重要】请充分利用联网搜索到的最新资料来丰富讲解内容，确保信息准确、时效。"
+            grounded_response = self.api_client.generate_with_search(
+                prompt=user_prompt,
+                system_instruction=search_instruction,
+                temperature=0.4,
+                max_tokens=2500,
+                search_query=knowledge_point.name,
+            )
+            
+            logger.info(
+                f"已完成知识点 '{knowledge_point.name}' 的阶段{stage}教学"
+                f"(联网搜索: {len(grounded_response.sources)} 个来源)"
+            )
+            return {
+                "content": grounded_response.content,
+                "sources": [
+                    {"title": s.title, "url": s.url}
+                    for s in grounded_response.sources
+                ],
+            }
+        else:
+            # 回退到原有纯文本行为
+            teaching_content = self.api_client.generate(
+                prompt=user_prompt,
+                system_instruction=system_instruction,
+                temperature=0.4,
+                max_tokens=2500,
+            )
+            
+            logger.info(
+                f"已完成知识点 '{knowledge_point.name}' 的阶段{stage}教学"
+            )
+            return {"content": teaching_content, "sources": []}
     
     def generate_question(
         self,
@@ -225,18 +249,22 @@ class TeacherAgent:
         question: str,
         image: Optional[str] = None,
         discussion_history: list = None
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
         讨论环节
         
-        在用户回答问题后，允许用户提出疑问并进行讨论
+        在用户回答问题后，允许用户提出疑问并进行讨论。
+        当 Web Research 开启时，讨论中也能引用最新资料。
         
         Args:
             knowledge_point: 知识点对象
-            question: 原问题
+            teaching_content: 教学内容
+            question: 用户问题
+            image: 可选图片
+            discussion_history: 讨论历史
             
         Returns:
-            讨论内容
+            包含 content 和 sources 的字典
         """
         stage = knowledge_point.get_teaching_stage()
         
@@ -261,12 +289,30 @@ class TeacherAgent:
         保持耐心和鼓励的语气，确保用户感到被支持和理解。
         """ 
 
-        answer = self.api_client.generate(
-            prompt=prompt,
-            image=image,
-            system_instruction=system_instruction,
-            temperature=0.5,
-            max_tokens=1500
-        )
-        
-        return answer
+        # NOTE: 讨论环节同样支持联网搜索，方便解答最新技术问题
+        config = get_config()
+        if config.api.web_search_enabled and not image:
+            # NOTE: 带图片时无法同时使用 google_search，回退到普通模式
+            grounded_response = self.api_client.generate_with_search(
+                prompt=prompt,
+                system_instruction=system_instruction,
+                temperature=0.5,
+                max_tokens=1500,
+                search_query=f"{knowledge_point.name} {question[:50]}",
+            )
+            return {
+                "content": grounded_response.content,
+                "sources": [
+                    {"title": s.title, "url": s.url}
+                    for s in grounded_response.sources
+                ],
+            }
+        else:
+            answer = self.api_client.generate(
+                prompt=prompt,
+                image=image,
+                system_instruction=system_instruction,
+                temperature=0.5,
+                max_tokens=1500,
+            )
+            return {"content": answer, "sources": []}

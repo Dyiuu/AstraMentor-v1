@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import type { ChatMessage } from '../../types';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Send, BookOpen, X, Paperclip } from 'lucide-react';
+import { Send, BookOpen, X, Paperclip, Globe, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -172,6 +172,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           alt="Sent image" 
                           className="max-w-full rounded-md border shadow-sm max-h-60 object-contain" 
                         />
+                      </div>
+                    )}
+                    {/* 搜索来源卡片 */}
+                    {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-white/20">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                          <Globe className="w-3 h-3" />
+                          <span>搜索来源</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.sources.map((source, i) => (
+                            <a
+                              key={i}
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded-full transition-colors truncate max-w-[200px]"
+                              title={source.title || source.url}
+                            >
+                              <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                              <span className="truncate">{source.title || new URL(source.url).hostname}</span>
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

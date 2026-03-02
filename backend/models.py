@@ -31,8 +31,15 @@ class EvaluateRequest(BaseModel):
     question: str
     answer: str
 
+class GroundingSource(BaseModel):
+    """搜索引用来源"""
+    title: str = ""
+    url: str = ""
+
+
 class TeachingContentResponse(BaseModel):
     content: str
+    sources: Optional[List[GroundingSource]] = None
     
 class EvaluationResponse(BaseModel):
     score: float

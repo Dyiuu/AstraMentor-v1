@@ -11,7 +11,8 @@ from backend.models import (
     RunCodeRequest,
     RunCodeResponse,
     SaveGraphRequest,
-    AddNodeRequest
+    AddNodeRequest,
+    GroundingSource,
 )
 
 from services.code_runner import CodeRunner
@@ -90,9 +91,17 @@ async def start_lesson(request: StartLearningRequest, service: LearningService =
     kp = service.get_knowledge_point(request.node_name)
     if not kp:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
-        
-    content = service.teach(kp)
-    return TeachingContentResponse(content=content)
+
+    # NOTE: teach() 现在返回 {"content": str, "sources": list} 字典
+    result = service.teach(kp)
+    sources = [
+        GroundingSource(title=s.get("title", ""), url=s.get("url", ""))
+        for s in result.get("sources", [])
+    ]
+    return TeachingContentResponse(
+        content=result["content"],
+        sources=sources if sources else None,
+    )
 
 @router.post("/learning/update")
 async def update_learning(request: UpdateNodeRequest, service: LearningService = Depends(get_service)):
@@ -118,14 +127,18 @@ async def chat(request: ChatRequest, service: LearningService = Depends(get_serv
     # Let's check TeacherAgent.discuss implementation later. 
     # Only passing "Context" if available.
     
-    response = service.discuss(
+    # NOTE: discuss() 现在返回 {"content": str, "sources": list} 字典
+    result = service.discuss(
         knowledge_point=kp,
-        teaching_content="", # Context might be missing, but let's see if it works without
+        teaching_content="",
         question=request.question,
         image=request.image,
         history=request.history
     )
-    return {"response": response}
+    return {
+        "response": result["content"],
+        "sources": result.get("sources", []),
+    }
 
 @router.post("/learning/question")
 async def generate_question(request: StartLearningRequest, service: LearningService = Depends(get_service)):

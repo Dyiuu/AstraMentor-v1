@@ -40,6 +40,11 @@ class APIConfig:
         default_factory=lambda: os.getenv("ASTRA_MODEL_NAME", "gemini-3-flash-preview")
     )
 
+    # Web Research（Google Search Grounding）开关
+    web_search_enabled: bool = field(
+        default_factory=lambda: os.getenv("ASTRA_WEB_SEARCH_ENABLED", "true").lower() == "true"
+    )
+
 
 @dataclass
 class LearningConfig:

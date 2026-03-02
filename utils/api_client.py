@@ -6,6 +6,10 @@ from typing import Optional, Any, List, Dict
 from google import genai
 from google.genai import types
 from config import get_config
+from utils.web_research import (
+    SearchGroundedResponse,
+    build_search_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +93,79 @@ class APIClient:
 
         except Exception as e:
             logger.error(f"内容生成失败: {e}")
+            raise
+
+    def generate_with_search(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        search_query: Optional[str] = None,
+    ) -> SearchGroundedResponse:
+        """
+        带联网搜索的内容生成（DuckDuckGo + LLM 两阶段方案）
+
+        1. 第一阶段：通过 DuckDuckGo 搜索获取最新信息
+        2. 第二阶段：将搜索结果注入 prompt，让 LLM 基于真实来源生成回答
+
+        Args:
+            prompt: 用户提示
+            system_instruction: 系统指令
+            temperature: 生成温度
+            max_tokens: 最大 token 数
+            search_query: 显式搜索查询词（如不提供则从 prompt 中提取）
+
+        Returns:
+            SearchGroundedResponse，包含文本和搜索来源
+        """
+        try:
+            # NOTE: 第一阶段 —— DuckDuckGo 搜索
+            query = search_query or prompt[:120]
+            logger.info(f"🔍 开始联网搜索: '{query[:60]}...'")
+            search_context, sources = build_search_context(query, max_results=5)
+
+            # NOTE: 第二阶段 —— 将搜索结果注入 prompt 让 LLM 合成
+            if search_context:
+                logger.info(f"🔍 搜索完成，获得 {len(sources)} 个来源，注入 prompt")
+                enhanced_prompt = f"""{prompt}
+
+以下是通过联网搜索获取的最新参考资料，请在回答中充分利用这些信息：
+
+{search_context}
+
+请基于以上搜索结果，结合你的知识，生成准确、详细的回答。"""
+            else:
+                logger.warning("🔍 搜索未返回结果，使用原始 prompt")
+                enhanced_prompt = prompt
+
+            # 调用 LLM 生成
+            cfg = types.GenerateContentConfig(
+                temperature=temperature,
+            )
+            if system_instruction:
+                cfg.system_instruction = system_instruction
+
+            resp = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[enhanced_prompt],
+                config=cfg,
+            )
+
+            text = getattr(resp, "text", "") or ""
+
+            logger.info(
+                f"✅ 联网搜索生成完成: {len(sources)} 个来源"
+            )
+
+            return SearchGroundedResponse(
+                content=text,
+                sources=sources,
+                search_queries=[query] if search_context else [],
+            )
+
+        except Exception as e:
+            logger.error(f"❌ 联网搜索生成失败: {e}")
             raise
 
     def generate_json(

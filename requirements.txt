@@ -1,7 +1,6 @@
-# AstraMentor 双Agent教学系统依赖
+# AstraMentor 多 Agent 教学系统依赖
 
 # Google Generative AI SDK
-# the lastest sdk
 google-genai>=0.5.0
 
 # 环境变量管理
@@ -10,7 +9,7 @@ python-dotenv>=1.0.0
 # 数据验证
 pydantic>=2.0.0
 
-# JSON处理
+# JSON 处理
 orjson>=3.9.0
 
 # 测试框架
@@ -26,3 +25,6 @@ networkx>=3.0
 
 # Development
 watchfiles>=0.21.0
+
+# Web Research（联网搜索，通过 DuckDuckGo 实现）
+ddgs>=9.0.0

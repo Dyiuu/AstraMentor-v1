@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { GraphData, LearnerState, EvaluationResult } from '../types';
+import type { GraphData, LearnerState, EvaluationResult, GroundingSource } from '../types';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
@@ -38,7 +38,7 @@ export const api = {
     },
 
     startLesson: async (nodeName: string) => {
-        const response = await client.post<{ content: string }>('/learning/lesson', { 
+        const response = await client.post<{ content: string; sources?: GroundingSource[] }>('/learning/lesson', { 
             node_name: nodeName,
             node_description: "",
             user_note: "",
@@ -59,7 +59,7 @@ export const api = {
     },
 
     chat: async (nodeName: string, question: string, history: any[], image?: string) => {
-        const response = await client.post<{ response: string }>('/learning/chat', {
+        const response = await client.post<{ response: string; sources?: GroundingSource[] }>('/learning/chat', {
             node_name: nodeName,
             question,
             image,

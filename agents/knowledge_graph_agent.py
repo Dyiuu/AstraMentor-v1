@@ -8,6 +8,8 @@ from typing import Dict, Any, List
 
 from utils.api_client import APIClient
 from models.knowledge_graph import KnowledgeGraph, ExpandGraphResult
+from config import get_config
+from utils.web_research import build_research_context
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +122,24 @@ class KnowledgeGraphAgent:
         logger.info(f"正在为主题 '{topic}' 生成知识星图...")
 
         try:
+            # NOTE: 先联网搜索获取背景知识，再注入 prompt 生成结构化 JSON
+            research_context = ""
+            config = get_config()
+            if config.api.web_search_enabled:
+                try:
+                    research_context = build_research_context(
+                        f"{topic} 学习路线 知识结构 核心概念", max_results=5
+                    )
+                    if research_context:
+                        logger.info(f"✅ 主题 '{topic}' 的搜索预研完成")
+                except Exception as e:
+                    # HACK: 搜索失败不应阻塞星图生成，回退到无搜索模式
+                    logger.warning(f"搜索预研失败，回退到无搜索模式: {e}")
+
+            # 第二阶段：将搜索结果注入 prompt 生成结构化 JSON
+            if research_context:
+                prompt += f"\n\n【联网搜索参考资料】\n{research_context}\n\n请基于以上搜索结果，结合你的专业知识，生成更准确、更完善的知识星图。"
+
             # 使用结构化输出
             graph_model = self.api_client.generate_json(
                 prompt=prompt,
@@ -128,7 +148,6 @@ class KnowledgeGraphAgent:
                 output_schema=KnowledgeGraph,
             )
 
-            # 转换为字典（保持向后兼容）
             graph_data = graph_model.model_dump()
 
             logger.info(f"✅ 知识星图生成成功，包含 {len(graph_data['nodes'])} 个节点")
@@ -181,6 +200,19 @@ class KnowledgeGraphAgent:
         logger.info(f"正在扩展图谱，添加节点 '{new_node_name}'...")
 
         try:
+            # NOTE: 先搜索新节点相关知识再生成结构化扩展
+            config = get_config()
+            if config.api.web_search_enabled:
+                try:
+                    research_ctx = build_research_context(
+                        f"{new_node_name} 知识点 前置依赖 进阶", max_results=3
+                    )
+                    if research_ctx:
+                        prompt += f"\n\n【联网搜索参考资料】\n{research_ctx}"
+                        logger.info(f"✅ 节点 '{new_node_name}' 的搜索预研完成")
+                except Exception as e:
+                    logger.warning(f"搜索预研失败，回退: {e}")
+
             expand_result = self.api_client.generate_json(
                 prompt=prompt,
                 system_instruction=self.EXPAND_SYSTEM_INSTRUCTION,

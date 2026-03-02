@@ -1,6 +1,14 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api import router
+
+# NOTE: 配置日志级别，确保项目模块的 INFO 日志可见
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 app = FastAPI(title="AstraMentor API", version="1.0.0")
 

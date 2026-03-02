@@ -40,11 +40,17 @@ export interface GraphData {
     links: GraphLink[];
 }
 
+export interface GroundingSource {
+    title: string;
+    url: string;
+}
+
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
     image?: string;
     timestamp?: number;
+    sources?: GroundingSource[];
 }
 
 export interface EvaluationResult {

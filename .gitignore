@@ -103,6 +103,9 @@ ENV/
 # 学习状态文件（包含用户学习进度，不上传）
 learner_state.json
 
+# 用户数据持久化目录
+user_data/
+
 # 测试数据
 test_data/
 
@@ -115,6 +118,13 @@ logs/
 *.temp
 .DS_Store
 Thumbs.db
+
+# 前端构建产物
+frontend/dist/
+
+# Gemini / Antigravity 代理工具
+.gemini/
+.agents/
 
 # =====================================================
 # 密钥 / 凭证

@@ -223,8 +223,13 @@ class LearningService:
             logger.error(f"Error formatting plan: {e}")
             return "Unable to generate plan. Let's start learning directly."
 
-    def teach(self, knowledge_point: KnowledgePoint) -> str:
-        """Generates teaching content."""
+    def teach(self, knowledge_point: KnowledgePoint) -> Dict[str, Any]:
+        """
+        生成教学内容
+
+        Returns:
+            包含 content 和 sources 的字典
+        """
         return self.teacher.teach(knowledge_point)
 
     def discuss(
@@ -234,8 +239,13 @@ class LearningService:
         question: str,
         image: Optional[str] = None,
         history: List[Dict[str, str]] = None
-    ) -> str:
-        """Handles user questions during discussion."""
+    ) -> Dict[str, Any]:
+        """
+        处理用户讨论问题
+
+        Returns:
+            包含 content 和 sources 的字典
+        """
         return self.teacher.discuss(
             knowledge_point=knowledge_point,
             teaching_content=teaching_content,

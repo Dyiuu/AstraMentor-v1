@@ -165,7 +165,9 @@ class AstraMentor:
             print(f"{'='*60}")
 
             print("\n🎓 正在讲解...")
-            teaching_content = self.service.teach(knowledge_point)
+            teach_result = self.service.teach(knowledge_point)
+            # NOTE: teach() 现在返回 {"content": str, "sources": list}
+            teaching_content = teach_result["content"] if isinstance(teach_result, dict) else teach_result
             print("\n" + teaching_content)
 
             current_discussion_round = 0
@@ -178,12 +180,14 @@ class AstraMentor:
                 question = input("请输入你的问题（直接回车跳过讨论环节）: ").strip()
                 
                 if question:
-                    discussion_response = self.service.discuss(
+                    discuss_result = self.service.discuss(
                         knowledge_point=knowledge_point,
                         teaching_content=teaching_content,
                         question=question,
                         history=discussion_history
                     )
+                    # NOTE: discuss() 现在返回 {"content": str, "sources": list}
+                    discussion_response = discuss_result["content"] if isinstance(discuss_result, dict) else discuss_result
                     print("\n" + discussion_response)
                     discussion_history.append(
                         {"question": question, "response": discussion_response}
