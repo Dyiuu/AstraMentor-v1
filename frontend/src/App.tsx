@@ -64,6 +64,8 @@ function App() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [contextMenuNode, setContextMenuNode] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // whether the lesson has actually started for the current node; used to stop regenerating plans
+  const [lessonStarted, setLessonStarted] = useState(false);
   const [isAddNodeDialogOpen, setIsAddNodeDialogOpen] = useState(false);
   const [isAddingNode, setIsAddingNode] = useState(false);
   const [showLanding, setShowLanding] = useState(!graphData); // Show landing if no graph active
@@ -386,6 +388,7 @@ function App() {
       setChatMessages([]);
       setTeachingPlan(null);
       setIsPlanView(false);
+      setLessonStarted(false);
       setShowLanding(false); // Switch to main view
       
       // Close sidebar on mobile? optional.
@@ -406,6 +409,7 @@ function App() {
           setCurrentTopic('');
           setCurrentGoal('');
           setCurrentGraphLevel('');
+          setLessonStarted(false);
           // Generate new ID for potential new session
           setCurrentSessionId(Date.now().toString());
           
@@ -433,6 +437,7 @@ function App() {
 
     // 2. Switch to new node
     setSelectedNode({ id: nodeId, name: nodeName, attributes });
+    setLessonStarted(false); // fresh node, lesson not started
 
     // 3. Load saved session state or reset
     if (selectedNode?.id === nodeId) return; 
@@ -451,8 +456,10 @@ function App() {
     }
   };
 
-  const handleStartLearning = async () => {
+  // notes provided by user (either from attributes or manual input) will be sent along with the plan request
+  const handleStartLearning = async (userNote: string = '') => {
     if (!selectedNode) return;
+    if (lessonStarted) return; // once lesson starts we no longer regenerate
     
     setIsChatLoading(true);
     try {
@@ -462,7 +469,8 @@ function App() {
       const response = await api.startLearning(
           selectedNode.name, 
           attributes.description || '', 
-          attributes.user_note || '',
+          // prefer explicit userNote parameter if provided, otherwise fall back to node attribute
+          userNote || attributes.user_note || '',
           attributes.weight_A || 0,
           attributes.weight_B || 0.8
       );
@@ -471,9 +479,15 @@ function App() {
       setTeachingPlan(response.content);
       setShowPlanPanel(true); // Auto-open plan panel
       
-      setChatMessages([
-        { role: 'assistant', content: response.content }
-      ]);
+      // Append the plan without deleting user's message
+      setChatMessages(prev => {
+        // If there's no message yet (first time), just set the plan
+        if (prev.length === 0) {
+          return [{ role: 'assistant', content: response.content }];
+        }
+        // Otherwise append the new plan
+        return [...prev, { role: 'assistant', content: response.content }];
+      });
       setIsPlanView(true); // Enable "Start Lesson" button
     } catch (error) {
       toast.error('Failed to generate teaching plan');
@@ -497,7 +511,8 @@ function App() {
 
         // 2. Ask for confirmation instead of immediate quiz
         setInteractionState('confirm_understanding');
-        setIsPlanView(false); 
+        setIsPlanView(false);
+        setLessonStarted(true); 
     } catch (error) {
         toast.error('Failed to start lesson');
         console.error(error);
@@ -592,13 +607,27 @@ function App() {
   const handleSendMessage = async (message: string, image?: string) => {
     if (!selectedNode) return;
 
-    // Add user message immediately
+    // Add user message immediately to show they provided input
     const userMessage: ChatMessage = { role: 'user', content: message };
     if (image) {
         userMessage.image = image;
     }
     const newMessages = [...chatMessages, userMessage];
     setChatMessages(newMessages);
+
+    // if a teaching plan exists but lesson hasn't started yet, treat any user input
+    // as a request to regenerate the plan instead of normal chat
+    if (!lessonStarted && teachingPlan) {
+        // chatMessages initially contains only the assistant plan message after generation
+        const onlyPlanMessage =
+            chatMessages.length === 1 && chatMessages[0].role === 'assistant';
+        if (onlyPlanMessage) {
+            // regenerate the teaching plan using the user's input as note
+            await handleStartLearning(message);
+            return;
+        }
+    }
+
     setIsChatLoading(true);
 
     try {
@@ -852,23 +881,34 @@ ${evaluation.analysis}
                                             <p className="text-sm text-muted-foreground">
                                             {t('app.start_learning_desc')}
                                             </p>
-                                            <Button onClick={handleStartLearning} disabled={isChatLoading} className="rounded-xl shadow-md">
+                                            <Button onClick={() => handleStartLearning()} disabled={isChatLoading} className="rounded-xl shadow-md">
                                             {isChatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                             {t('app.start_learning_btn')}
                                             </Button>
                                         </div>
                                     ) : (
-                                        <ChatInterface 
-                                            messages={chatMessages} 
-                                            onSendMessage={handleSendMessage}
-                                            currentNodeName={selectedNode?.name || null}
-                                            isLoading={isChatLoading}
-                                            showStartLesson={isPlanView}
-                                            onStartLesson={handleConfirmStartLesson}
-                                            interactionState={interactionState}
-                                            onStartQuiz={handleStartQuiz}
-                                            onExplainAgain={handleExplainAgain}
-                                        />
+                                        <>
+                                            {/* always offer the same button above chat if plan exists and lesson not yet started */}
+                                            {selectedNode && teachingPlan && !lessonStarted && (
+                                                <div className="flex justify-center my-2">
+                                                    <Button onClick={() => handleStartLearning()} disabled={isChatLoading} className="rounded-xl shadow-md">
+                                                        {isChatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                        {t('app.start_learning_btn')}
+                                                    </Button>
+                                                </div>
+                                            )}
+                                            <ChatInterface 
+                                                messages={chatMessages} 
+                                                onSendMessage={handleSendMessage}
+                                                currentNodeName={selectedNode?.name || null}
+                                                isLoading={isChatLoading}
+                                                showStartLesson={isPlanView}
+                                                onStartLesson={handleConfirmStartLesson}
+                                                interactionState={interactionState}
+                                                onStartQuiz={handleStartQuiz}
+                                                onExplainAgain={handleExplainAgain}
+                                            />
+                                        </>
                                     )}
                                 </div>
                             </div>
