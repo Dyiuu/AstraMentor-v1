@@ -44,16 +44,18 @@ class TeacherAgent:
     
     def generate_teaching_plan(
         self,
-        knowledge_point: KnowledgePoint
+        knowledge_point: KnowledgePoint,
+        context: str = ""
     ) -> str:
         """
         生成教学计划
-        
+
         Args:
             knowledge_point: 知识点对象
+            context: 学习者前置知识上下文
             
         Returns:
-            教学计划文本
+            教学计划 Pydantic 对象
         """
         prompt = get_teaching_plan_prompt(
             topic=knowledge_point.name,
@@ -62,24 +64,36 @@ class TeacherAgent:
             note=knowledge_point.note
         )
         
-        system_instruction = """
-你是AstraMentor，一位专业的AI编程教育专家。
+        # NOTE: 将前置知识上下文追加到 prompt，让 AI 制定计划时考虑学习者基础
+        if context:
+            prompt += f"\n\n{context}"
+        
+        system_instruction = """你是AstraMentor，一位专业的AI教育专家。
 你的任务是为学习者制定个性化的教学计划。
-请确保计划循序渐进，适合学习者当前的水平。
+
+【核心原则】
+1. 只聚焦当前知识点本身，不要讲解后续/未来的知识点
+2. 如果学习者已经掌握了前置知识，直接跳过不需要复习
+3. 如果学习者的前置知识薄弱，在计划中安排简要回顾（作为铺垫，不是完整教学）
+4. 计划应循序渐进，每一步的描述应该简洁明确
 """
-        class planSchema(BaseModel):
-            todo: list[str]
+
+        # NOTE: 结构化 schema，每个教学步骤包含名称、内容和验证方式
+        class PlanStep(BaseModel):
+            name: str
+            content: str
+            verification: str
+
+        class PlanSchema(BaseModel):
+            goal: str
+            steps: list[PlanStep]
         
         plan = self.api_client.generate_json(
             prompt=prompt,
             system_instruction=system_instruction,
             temperature=0.7,
-            output_schema=planSchema
+            output_schema=PlanSchema
         )
-        # print(f"生成的教学计划: {plan}")
-
-
-        
         
         logger.info(f"已生成知识点 '{knowledge_point.name}' 的教学计划")
         return plan
@@ -87,17 +101,18 @@ class TeacherAgent:
     def teach(
         self,
         knowledge_point: KnowledgePoint,
+        plan_step: Optional[Dict[str, str]] = None,
         context: str = ""
     ) -> Dict[str, Any]:
         """
         进行教学
         
         根据知识点的掌握程度选择合适的教学风格。
-        当 Web Research 开启时，会启用 Google Search Grounding
-        以获取最新资料并在讲解中自动引用来源。
+        当提供 plan_step 时，严格按照教学计划的当前步骤进行讲解。
         
         Args:
             knowledge_point: 知识点对象
+            plan_step: 当前教学计划步骤 dict（可选）
             context: 额外的上下文信息
             
         Returns:
@@ -116,6 +131,15 @@ class TeacherAgent:
             user_prompt += f"\n\n用户备注：{knowledge_point.note}"
         if context:
             user_prompt += f"\n\n补充说明：{context}"
+
+        # NOTE: 当存在教学计划步骤时，将步骤要求注入 prompt 实现按步教学
+        if plan_step:
+            user_prompt += f"""\n\n【当前教学步骤】
+步骤名称：{plan_step.get('name', '')}
+教学内容要求：{plan_step.get('content', '')}
+
+请严格按照上述步骤要求进行讲解，只讲本步骤的内容，不要超前。
+【重要】不要在讲解中包含任何练习题、填空题、改错题或测验，出题由专门的评估模块处理。"""
         
         # NOTE: 根据配置决定是否启用联网搜索
         config = get_config()
@@ -178,11 +202,24 @@ class TeacherAgent:
             current_score=knowledge_point.actual_mastery
         )
         
-        system_instruction = """
-你是AstraMentor的提问助手。
+        system_instruction = """你是AstraMentor的提问助手。
 请根据学习者的当前水平，生成一个适合的验证问题。
 问题应该能够准确评估学习者对知识点的掌握程度。
 直接输出问题内容，不要有多余的前缀或解释。
+
+【格式要求】
+- 如果是选择题，题干和选项之间空一行，每个选项独占一行
+- 示例格式：
+
+以下哪项最能描述xxx？
+
+A) 第一个选项
+
+B) 第二个选项
+
+C) 第三个选项
+
+D) 第四个选项
 """
         
         question = self.api_client.generate(
@@ -194,6 +231,56 @@ class TeacherAgent:
         logger.info(f"已生成知识点 '{knowledge_point.name}' 的验证问题")
         return question.strip()
     
+    def reteach_from_errors(
+        self,
+        knowledge_point: KnowledgePoint,
+        plan_step: Optional[Dict[str, str]] = None,
+        error_analysis: str = ""
+    ) -> Dict[str, Any]:
+        """
+        针对用户的错误，重新讲解当前步骤的薄弱环节
+
+        Args:
+            knowledge_point: 知识点对象
+            plan_step: 当前教学步骤
+            error_analysis: AI 评价中的错误分析
+
+        Returns:
+            包含 content 和 sources 的字典
+        """
+        stage = knowledge_point.get_teaching_stage()
+
+        system_instruction = get_teaching_prompt(
+            stage=stage,
+            topic=knowledge_point.name,
+            current_score=knowledge_point.actual_mastery
+        )
+
+        user_prompt = f"""请针对学习者在以下知识点上的薄弱环节重新讲解：
+
+【知识点】{knowledge_point.name}"""
+
+        if plan_step:
+            user_prompt += f"""\n\n【当前教学步骤】
+步骤名称：{plan_step.get('name', '')}
+教学内容：{plan_step.get('content', '')}"""
+
+        if error_analysis:
+            user_prompt += f"""\n\n【学习者的薄弱环节】
+{error_analysis}
+
+请重点针对以上薄弱环节进行补充讲解，用不同的角度或例子帮助学习者理解。"""
+
+        teaching_content = self.api_client.generate(
+            prompt=user_prompt,
+            system_instruction=system_instruction,
+            temperature=0.5,
+            max_tokens=2500,
+        )
+
+        logger.info(f"已完成知识点 '{knowledge_point.name}' 的错误重讲")
+        return {"content": teaching_content, "sources": []}
+
     def explain_answer(
         self,
         knowledge_point: KnowledgePoint,

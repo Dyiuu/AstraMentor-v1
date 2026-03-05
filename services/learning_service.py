@@ -19,13 +19,21 @@ class LearningService:
     Decoupled from CLI/Web interfaces.
     """
 
-    def __init__(self, state_file: str = "learner_state.json"):
+    def __init__(self, topic: str = ""):
         self.api_client = APIClient()
         self.knowledge_graph = KnowledgeGraphAgent(api_client=self.api_client)
         self.teacher = TeacherAgent(api_client=self.api_client)
         self.evaluator = EvaluationAgent(api_client=self.api_client)
+
+        # NOTE: 按 topic 隔离学习状态文件，每张星图独立存储
+        if topic:
+            safe_topic = topic.replace(' ', '_').replace('/', '_')
+            state_file = str(Path("test_data") / f"learner_state_{safe_topic}.json")
+        else:
+            state_file = "learner_state.json"
+
         self.learner_state = LearnerState(state_file=state_file)
-        logger.info("LearningService initialized")
+        logger.info(f"LearningService initialized (state_file={state_file})")
 
     def generate_knowledge_graph(
         self,
@@ -33,6 +41,7 @@ class LearningService:
         learning_goal: str = "",
         current_level: str = "零基础",
         target_level: str = "掌握核心概念",
+        complexity: int = 2,
     ) -> Optional[Dict[str, Any]]:
         """Generates a knowledge graph."""
         try:
@@ -41,6 +50,7 @@ class LearningService:
                 learning_goal=learning_goal,
                 current_level=current_level,
                 target_level=target_level,
+                complexity=complexity,
             )
             
             # Save to file (legacy behavior, but useful)
@@ -73,6 +83,28 @@ class LearningService:
         except Exception as e:
             logger.error(f"Failed to save graph: {e}")
             return False
+
+    def delete_graph(self, topic: str) -> None:
+        """
+        删除星图对应的图谱文件和学习状态文件
+
+        Args:
+            topic: 学习主题，用于定位需要删除的文件
+        """
+        safe_topic = topic.replace(' ', '_').replace('/', '_')
+        test_data_dir = Path("test_data")
+
+        # NOTE: 删除图谱数据文件和学习状态文件
+        files_to_delete = [
+            test_data_dir / f"knowledge_graph_{safe_topic}.json",
+            test_data_dir / f"learner_state_{safe_topic}.json",
+        ]
+        for file_path in files_to_delete:
+            if file_path.exists():
+                file_path.unlink()
+                logger.info(f"已删除文件: {file_path}")
+            else:
+                logger.debug(f"文件不存在，跳过: {file_path}")
 
     def expand_graph(
         self,
@@ -154,6 +186,7 @@ class LearningService:
         user_note: str = "",
         target_mastery: float = 0.8,
         current_mastery: float = 0.0,
+        graph_data: Optional[Dict[str, Any]] = None,
     ) -> KnowledgePoint:
         """Initializes or retrieves a knowledge point for learning."""
         combined_note = node_description
@@ -168,7 +201,7 @@ class LearningService:
         )
         
         # New flow: Return Teaching Plan instead of just the KP
-        return self.generate_teaching_plan(kp)
+        return self.generate_teaching_plan(kp, graph_data=graph_data)
 
     def update_knowledge_point(
         self,
@@ -201,36 +234,202 @@ class LearningService:
         self.learner_state._auto_save()
         return kp
 
-    def generate_teaching_plan(self, knowledge_point: KnowledgePoint) -> str:
+    def generate_teaching_plan(
+        self,
+        knowledge_point: KnowledgePoint,
+        graph_data: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Generates a teaching plan for a knowledge point."""
-        plan_json = self.teacher.generate_teaching_plan(knowledge_point)
-        # plan_json is a Dict because teacher agent parses it with Pydantic
-        # format it to a nice string
+        context = self.build_learner_context(knowledge_point.name, graph_data)
+        if context:
+            logger.info(
+                f"📋 为教学计划 '{knowledge_point.name}' 注入前置知识上下文:\n{context}"
+            )
+        plan_obj = self.teacher.generate_teaching_plan(knowledge_point, context=context)
+
+        # NOTE: 将结构化的教学计划持久化到 KnowledgePoint
         try:
-             # It might be a dict or an object depending on how APIClient returns pydantic models
-             # TeacherAgent.generate_teaching_plan returns a Pydantic model instance or dict?
-             # Let's check TeacherAgent. It returns 'plan' which comes from api_client.generate_json
-             # api_client.generate_json returns the parsed object (planSchema instance)
-             
-             steps = plan_json.todo
-             formatted_plan = f"### 📚 {knowledge_point.name} 教学计划\n\n为了帮你更好地掌握这个知识点，我为你准备了以下学习步骤：\n\n"
-             for idx, step in enumerate(steps, 1):
-                 formatted_plan += f"{idx}. {step}\n"
-             
-             formatted_plan += "\n准备好了吗？点击下方按钮开始学习吧！"
-             return formatted_plan
+            goal = plan_obj.goal
+            steps = plan_obj.steps
+
+            # 持久化计划到 KnowledgePoint，供后续 teach() 按步引用
+            knowledge_point.teaching_plan = [
+                {"name": s.name, "content": s.content, "verification": s.verification}
+                for s in steps
+            ]
+            knowledge_point.current_step = 0
+            knowledge_point.step_scores = []  # NOTE: 重置步骤分数
+            knowledge_point.plan_generated_at = datetime.now().isoformat()
+            self.learner_state._auto_save()
+
+            # 渲染 Markdown 格式用于前端展示
+            formatted_plan = f"### 📚 {knowledge_point.name} 教学计划\n\n"
+            formatted_plan += f"**学习目标：** {goal}\n\n"
+
+            for idx, step in enumerate(steps, 1):
+                formatted_plan += f"**教学步骤{idx}：{step.name}。** "
+                formatted_plan += f"内容：{step.content}。"
+                formatted_plan += f" 验证方式：{step.verification}。\n\n"
+
+            formatted_plan += "准备好了吗？点击下方按钮开始学习吧！"
+            return formatted_plan
         except Exception as e:
             logger.error(f"Error formatting plan: {e}")
             return "Unable to generate plan. Let's start learning directly."
 
+    def build_learner_context(
+        self,
+        node_name: str,
+        graph_data: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        构建学习者上下文摘要，让 AI 了解学习者的全部前置知识掌握情况
+
+        递归搜索当前节点的所有祖先节点（不只直接父层），
+        并按掌握程度分类，指导 AI 聚焦当前知识点的教学。
+
+        Args:
+            node_name: 当前学习的知识点名称
+            graph_data: 图谱数据（包含 nodes 和 links）
+
+        Returns:
+            学习者上下文字符串，为空时返回空字符串
+        """
+        if not graph_data:
+            return ""
+
+        nodes = graph_data.get("nodes", [])
+        links = graph_data.get("links", [])
+
+        # NOTE: 构建节点 ID 索引和反向邻接表（target → sources）
+        current_node_id = None
+        node_id_to_info: Dict[str, Dict] = {}
+        # 反向图：记录每个节点的所有前置节点
+        reverse_adj: Dict[str, list] = {}
+        for node in nodes:
+            node_id_to_info[node["id"]] = node
+            reverse_adj.setdefault(node["id"], [])
+            if node.get("name") == node_name:
+                current_node_id = node["id"]
+
+        for link in links:
+            reverse_adj.setdefault(link["target"], []).append(link["source"])
+
+        if not current_node_id:
+            return ""
+
+        # NOTE: BFS 搜索所有祖先节点（递归向上追溯）
+        visited = set()
+        queue = list(reverse_adj.get(current_node_id, []))
+        ancestor_ids = []
+        while queue:
+            nid = queue.pop(0)
+            if nid in visited:
+                continue
+            visited.add(nid)
+            ancestor_ids.append(nid)
+            # 继续向上追溯该节点的前置节点
+            for parent_id in reverse_adj.get(nid, []):
+                if parent_id not in visited:
+                    queue.append(parent_id)
+
+        if not ancestor_ids:
+            return ""
+
+        # NOTE: 将祖先节点按掌握程度分为两组
+        mastered = []    # 已掌握（≥0.6），可以跳过
+        weak = []        # 薄弱或未学习（<0.6），需要铺垫
+
+        for ancestor_id in ancestor_ids:
+            ancestor_node = node_id_to_info.get(ancestor_id)
+            if not ancestor_node:
+                continue
+
+            ancestor_name = ancestor_node.get("name", "")
+            kp = self.learner_state.get_knowledge_point(ancestor_name)
+            if kp:
+                mastery = kp.actual_mastery
+            else:
+                mastery = ancestor_node.get("attributes", {}).get("weight_A", 0.0)
+
+            if mastery >= 0.6:
+                mastered.append(f"- {ancestor_name} ({mastery:.0%})")
+            else:
+                weak.append(f"- {ancestor_name} ({mastery:.0%})")
+
+        # NOTE: 构建上下文指令
+        context_lines = ["【学习者知识背景】"]
+
+        if mastered:
+            context_lines.append("以下前置知识学习者已掌握，无需重复讲解，可直接引用：")
+            context_lines.extend(mastered)
+
+        if weak:
+            context_lines.append("以下前置知识学习者尚未掌握或比较薄弱，讲解时需要简要铺垫：")
+            context_lines.extend(weak)
+
+        context_lines.append("")
+        context_lines.append(
+            "【重要】请只围绕当前知识点制定教学计划，"
+            "不要涉及学习路线图中后续的知识点。"
+        )
+
+        return "\n".join(context_lines)
+
     def teach(self, knowledge_point: KnowledgePoint) -> Dict[str, Any]:
         """
-        生成教学内容
+        生成教学内容，按照教学计划的当前步骤进行讲解
 
         Returns:
             包含 content 和 sources 的字典
         """
-        return self.teacher.teach(knowledge_point)
+        plan_step = knowledge_point.get_current_plan_step()
+        return self.teacher.teach(knowledge_point, plan_step=plan_step)
+
+    def reteach_step(
+        self,
+        knowledge_point: KnowledgePoint,
+        error_analysis: str = "",
+    ) -> Dict[str, Any]:
+        """
+        针对用户的错误，重新讲解当前步骤
+
+        Args:
+            knowledge_point: 知识点对象
+            error_analysis: 评价中的错误分析（可选）
+
+        Returns:
+            包含 content 和 sources 的字典
+        """
+        plan_step = knowledge_point.get_current_plan_step()
+        return self.teacher.reteach_from_errors(
+            knowledge_point, plan_step=plan_step, error_analysis=error_analysis
+        )
+
+    def advance_and_teach(self, knowledge_point: KnowledgePoint) -> Dict[str, Any]:
+        """
+        推进到下一个教学步骤并进行讲解
+
+        Returns:
+            包含 content、sources、current_step、total_steps、is_plan_completed 的字典
+        """
+        knowledge_point.advance_step()
+        self.learner_state._auto_save()
+
+        if knowledge_point.is_plan_completed():
+            return {
+                "content": "🎉 所有教学步骤已完成！恭喜你完成了本知识点的学习！",
+                "sources": [],
+                "current_step": knowledge_point.current_step,
+                "total_steps": len(knowledge_point.teaching_plan),
+                "is_plan_completed": True,
+            }
+
+        result = self.teach(knowledge_point)
+        result["current_step"] = knowledge_point.current_step
+        result["total_steps"] = len(knowledge_point.teaching_plan)
+        result["is_plan_completed"] = False
+        return result
 
     def discuss(
         self,
@@ -263,20 +462,42 @@ class LearningService:
         knowledge_point: KnowledgePoint,
         question: str,
         answer: str
-    ) -> Any: # Returns EvaluationResult (pydantic model or object)
-        """Evaluates the user's answer and updates state."""
+    ) -> Any:
+        """
+        评估用户回答并更新掌握度
+
+        双层评分机制：
+        - 有教学计划时：记录步骤分 → 加权计算全局掌握度
+        - 无教学计划时：沿用原有 EMA 评分
+        """
         evaluation = self.evaluator.evaluate(
             knowledge_point=knowledge_point,
             question=question,
             answer=answer
         )
-        
-        self.evaluator.update_learner_state(
-            learner_state=self.learner_state,
-            knowledge_point_name=knowledge_point.name,
-            evaluation_result=evaluation,
-        )
-        
+
+        if knowledge_point.teaching_plan:
+            # NOTE: 双层评分 —— 记录步骤分并加权聚合
+            step_idx = knowledge_point.current_step
+            knowledge_point.record_step_score(step_idx, evaluation.score)
+
+            # 用加权公式重新计算全局掌握度
+            new_mastery = knowledge_point.calculate_weighted_mastery()
+            knowledge_point.update_mastery(new_mastery, evaluation.score, evaluation.feedback)
+            self.learner_state._auto_save()
+
+            logger.info(
+                f"双层评分: 步骤 {step_idx + 1} 得分={evaluation.score:.2f}, "
+                f"全局掌握度={new_mastery:.2f}"
+            )
+        else:
+            # NOTE: 无教学计划时，沿用原有 EMA 评分公式
+            self.evaluator.update_learner_state(
+                learner_state=self.learner_state,
+                knowledge_point_name=knowledge_point.name,
+                evaluation_result=evaluation,
+            )
+
         return evaluation
 
     def get_progress_feedback(self, evaluation_result: Any, knowledge_point: KnowledgePoint) -> str:

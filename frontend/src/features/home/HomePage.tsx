@@ -1,13 +1,14 @@
 import { Button } from "../../components/ui/button";
-import { Brain, Network, Sparkles, ArrowRight } from "lucide-react";
+import { Brain, Network, Sparkles, ArrowRight, FileUp } from "lucide-react";
 import React from 'react';
 import StarBackground from './StarBackground';
 
 interface HomePageProps {
   onStart: () => void;
+  onUploadDoc?: () => void;
 }
 
-export default function HomePage({ onStart }: HomePageProps) {
+export default function HomePage({ onStart, onUploadDoc }: HomePageProps) {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col relative overflow-hidden">
         {/* Background Gradients/Blobs - using existing tailwind colors but with opacity */}
@@ -60,6 +61,17 @@ export default function HomePage({ onStart }: HomePageProps) {
                     Start Learning Now
                     <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
+                {onUploadDoc && (
+                  <Button 
+                      size="lg" 
+                      onClick={onUploadDoc} 
+                      variant="outline"
+                      className="h-14 px-8 text-lg rounded-full border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1"
+                  >
+                      <FileUp className="mr-2 w-5 h-5" />
+                      Upload Document
+                  </Button>
+                )}
             </div>
         </div>
 

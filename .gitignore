@@ -96,6 +96,9 @@ ENV/
 /.emacs.desktop
 /.emacs.desktop.lock
 
+# Cursor
+.cursor/
+
 # =====================================================
 # 项目特定
 # =====================================================
@@ -106,7 +109,7 @@ learner_state.json
 # 用户数据持久化目录
 user_data/
 
-# 测试数据
+# 测试数据（AI 生成的知识图谱 JSON、上传的 PDF 文件）
 test_data/
 
 # 日志文件
@@ -125,6 +128,9 @@ frontend/dist/
 # Gemini / Antigravity 代理工具
 .gemini/
 .agents/
+
+# NPM 缓存和锁文件（项目锁文件除外）
+npm_zpix.json
 
 # =====================================================
 # 密钥 / 凭证

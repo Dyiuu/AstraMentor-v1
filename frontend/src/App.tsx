@@ -37,6 +37,8 @@ interface FullGraphSession extends GraphSession {
     learningGoal: string;
     currentLevel: string;
     learnerState: LearnerState | null;
+    // NOTE: 内部主题 ID，主题模式为主题名，文档模式为 doc_{hash}
+    internalTopic?: string;
 }
 
 function App() {
@@ -44,6 +46,7 @@ function App() {
   // Input Form State
   const [inputTopic, setInputTopic] = useState('');
   const [inputGoal, setInputGoal] = useState('');
+  const [inputComplexity, setInputComplexity] = useState(2);
   const [inputLevel, setInputLevel] = useState('');
 
   // Active Session State
@@ -71,6 +74,12 @@ function App() {
   const [isAddingNode, setIsAddingNode] = useState(false);
   const [showLanding, setShowLanding] = useState(!graphData); // Show landing if no graph active
 
+  // ======== 文档模式状态 ========
+  const [docMode, setDocMode] = useState(false);       // 是否处于文档模式
+  const [docId, setDocId] = useState('');               // 当前文档 ID
+  const [docFilename, setDocFilename] = useState('');   // 当前文档文件名
+  const [isDocUploading, setIsDocUploading] = useState(false);
+
  
   // UI States for Learning Flow
   const [isPlanView, setIsPlanView] = useState(false); // True when showing plan confirmation button
@@ -85,8 +94,11 @@ function App() {
   
   // Theme State
   const [theme, setTheme] = useState<'light' | 'eye-care'>('light');
-  const [interactionState, setInteractionState] = useState<'chat' | 'confirm_understanding' | 'quiz'>('chat');
+  const [interactionState, setInteractionState] = useState<'chat' | 'confirm_understanding' | 'quiz' | 'step_taught' | 'step_evaluated'>('chat');
   const [currentQuestion, setCurrentQuestion] = useState<string>("");
+  // NOTE: step progress tracking and last evaluation analysis
+  const [stepProgress, setStepProgress] = useState<{ current: number; total: number } | null>(null);
+  const [lastEvalAnalysis, setLastEvalAnalysis] = useState<string>('');
 
   // Apply theme
   useEffect(() => {
@@ -235,13 +247,34 @@ function App() {
 
   const saveCurrentSession = () => {
       if (!graphData) return;
+
+      // NOTE: 将当前正在查看的节点的对话状态合并到 nodeSessions 快照中，
+      // 避免切换星图后当前节点的聊天记录丢失
+      let mergedNodeSessions = { ...nodeSessions };
+      if (selectedNode) {
+          mergedNodeSessions[selectedNode.id] = {
+              chatMessages,
+              teachingPlan,
+              isPlanView,
+              showPlanPanel,
+              lessonStarted
+          };
+      }
       
+      // NOTE: 文档模式下 currentTopic 是内部 ID（doc_xxx），侧边栏应显示文件名
+      const existingSession = graphSessions.find(s => s.id === currentSessionId);
+      const displayTopic = existingSession?.topic
+        || (docMode && docFilename ? `📄 ${docFilename}` : '')
+        || currentTopic
+        || "未命名星图";
+
       const session: FullGraphSession = {
           id: currentSessionId,
-          topic: currentTopic || "未命名星图",
+          topic: displayTopic,
+          internalTopic: currentTopic,
           date: new Date().toISOString(),
           graphData,
-          nodeSessions, // Current node sessions
+          nodeSessions: mergedNodeSessions,
           learningGoal: currentGoal,
           currentLevel: currentGraphLevel,
           learnerState,
@@ -276,7 +309,7 @@ function App() {
     try {
       toast.info('Generating Knowledge Graph...');
       // Use user input for topic, goal, and current level. 
-      const data = await api.generateGraph(inputTopic, inputGoal, inputLevel || '零基础', '掌握核心概念');
+      const data = await api.generateGraph(inputTopic, inputGoal, inputLevel || '零基础', '掌握核心概念', inputComplexity);
       
       // Reset state for new graph
       setGraphData(data);
@@ -285,6 +318,10 @@ function App() {
       setChatMessages([]);
       setTeachingPlan(null);
       setCurrentSessionId(newSessionId);
+      // NOTE: 主题模式生成时必须清除文档模式状态，避免串台
+      setDocMode(false);
+      setDocId('');
+      setDocFilename('');
       
       // Update active session metadata
       setCurrentTopic(inputTopic);
@@ -295,6 +332,7 @@ function App() {
       const newSession: FullGraphSession = {
           id: newSessionId,
           topic: inputTopic,
+          internalTopic: inputTopic,
           date: new Date().toISOString(),
           graphData: data,
           nodeSessions: {},
@@ -314,6 +352,76 @@ function App() {
       console.error(error);
     } finally {
       setIsGenerating(false);
+      // NOTE: 清空对话框输入，避免下次打开残留旧值
+      setInputTopic('');
+      setInputLevel('');
+      setInputGoal('');
+    }
+  };
+
+  /**
+   * 文档模式：上传 PDF 并生成星图
+   * NOTE: 先上传解析，再调用文档星图 Agent 生成
+   */
+  const handleUploadAndGenerate = async (file: File, complexity: number, _level: string = '', _goal: string = '') => {
+    if (graphData) saveCurrentSession();
+
+    setIsDocUploading(true);
+    setIsDialogOpen(false);
+    const newSessionId = Date.now().toString();
+
+    try {
+      // 第一步：上传并解析
+      toast.info(t('doc.uploading'));
+      const uploadResult = await api.uploadDocument(file);
+      toast.success(`${t('doc.upload_success')}: ${uploadResult.total_pages} 页, ${uploadResult.chunk_count} 个知识块`);
+
+      // 第二步：生成星图
+      setIsDocUploading(false);
+      setIsGenerating(true);
+      toast.info(t('doc.generating_graph'));
+      const data = await api.generateDocGraph(uploadResult.doc_id, complexity);
+
+      // 切换到文档模式
+      setDocMode(true);
+      setDocId(uploadResult.doc_id);
+      setDocFilename(uploadResult.filename);
+
+      // 重置状态
+      setGraphData(data);
+      setNodeSessions({});
+      setSelectedNode(null);
+      setChatMessages([]);
+      setTeachingPlan(null);
+      setCurrentSessionId(newSessionId);
+      setCurrentTopic(`doc_${uploadResult.doc_id}`);
+      setCurrentGoal('');
+      setCurrentGraphLevel('');
+
+      const newSession: FullGraphSession = {
+        id: newSessionId,
+        topic: `📄 ${uploadResult.filename}`,
+        internalTopic: `doc_${uploadResult.doc_id}`,
+        date: new Date().toISOString(),
+        graphData: data,
+        nodeSessions: {},
+        learningGoal: '',
+        currentLevel: '',
+        learnerState,
+        averageMastery: calculateAverageMastery(data.nodes),
+      };
+      setGraphSessions(prev => [newSession, ...prev]);
+      setShowLanding(false);
+      toast.success('文档知识星图生成成功！');
+    } catch (error) {
+      toast.error(t('doc.upload_fail'));
+      console.error(error);
+    } finally {
+      setIsDocUploading(false);
+      setIsGenerating(false);
+      // NOTE: 清空对话框输入
+      setInputLevel('');
+      setInputGoal('');
     }
   };
 
@@ -375,28 +483,55 @@ function App() {
       const session = graphSessions.find(s => s.id === sessionId);
       if (!session) return;
 
+      // NOTE: 判断是否为文档模式会话，正确恢复 docMode 状态
+      const isDocSession = session.topic.startsWith('📄 ');
+      if (isDocSession) {
+          // 从 learningGoal 或 currentLevel 中恢复 doc_id（如果存储了的话）
+          // 或者从内部 topic（doc_xxx）中提取
+          setDocMode(true);
+          // 从 graphData 内部的 topic 字段提取 doc_id
+          const storedTopic = session.internalTopic || '';
+          const docIdMatch = storedTopic.match(/doc_([a-f0-9]+)/);
+          setDocId(docIdMatch ? docIdMatch[1] : '');
+          setDocFilename(session.topic.replace('📄 ', ''));
+      } else {
+          setDocMode(false);
+          setDocId('');
+          setDocFilename('');
+      }
+
       // Restore session
       setCurrentSessionId(session.id);
-      setCurrentTopic(session.topic);
+      setCurrentTopic(session.internalTopic || session.topic);
       setCurrentGoal(session.learningGoal);
       setCurrentGraphLevel(session.currentLevel);
       setGraphData(session.graphData);
       setNodeSessions(session.nodeSessions);
       setLearnerState(session.learnerState);
       
-      // Reset View State (start fresh on the graph or restore last node? Session doesn't store last selected node in FullGraphSession interface yet)
+      // Reset View State
       setSelectedNode(null);
       setChatMessages([]);
       setTeachingPlan(null);
       setIsPlanView(false);
       setLessonStarted(false);
-      setShowLanding(false); // Switch to main view
-      
-      // Close sidebar on mobile? optional.
+      setInteractionState('chat');
+      setShowLanding(false);
   };
 
-  const handleDeleteSession = (sessionId: string) => {
+  const handleDeleteSession = async (sessionId: string) => {
       console.log('Deleting session:', sessionId, 'Current:', currentSessionId);
+
+      // NOTE: 获取要删除的 session 的 topic，用于删除后端对应的 JSON 文件
+      const sessionToDelete = graphSessions.find(s => s.id === sessionId);
+      if (sessionToDelete?.topic) {
+          try {
+              await api.deleteGraph(sessionToDelete.topic);
+          } catch (error) {
+              console.error('Failed to delete graph files:', error);
+          }
+      }
+
       setGraphSessions(prev => prev.filter(s => s.id !== sessionId));
       
       // If deleted session was active, reset state
@@ -411,6 +546,7 @@ function App() {
           setCurrentGoal('');
           setCurrentGraphLevel('');
           setLessonStarted(false);
+          setInteractionState('chat');
           // Generate new ID for potential new session
           setCurrentSessionId(Date.now().toString());
           
@@ -457,6 +593,7 @@ function App() {
         setTeachingPlan(null); // Reset plan
         setIsPlanView(false);
         setLessonStarted(false); // fresh node, lesson not started
+        setInteractionState('chat');
     }
   };
 
@@ -466,18 +603,30 @@ function App() {
     if (lessonStarted) return; // once lesson starts we no longer regenerate
     
     setIsChatLoading(true);
+    // NOTE: 生成教学计划时重置交互状态，避免与上课后的按钮冲突
+    setInteractionState('chat');
     try {
       toast.info(`Generating Teaching Plan for ${selectedNode.name}...`);
       const attributes = (selectedNode as any).attributes || {};
       
-      const response = await api.startLearning(
-          selectedNode.name, 
-          attributes.description || '', 
-          // prefer explicit userNote parameter if provided, otherwise fall back to node attribute
-          userNote || attributes.user_note || '',
-          attributes.weight_A || 0,
-          attributes.weight_B || 0.8
-      );
+      // NOTE: 文档模式使用 docStartLearning，主题模式使用 startLearning
+      const response = docMode
+        ? await api.docStartLearning(
+            docId,
+            selectedNode.name,
+            attributes.description || '',
+            userNote || attributes.user_note || '',
+            attributes.weight_A || 0,
+            attributes.weight_B || 0.8
+          )
+        : await api.startLearning(
+            currentTopic,
+            selectedNode.name, 
+            attributes.description || '', 
+            userNote || attributes.user_note || '',
+            attributes.weight_A || 0,
+            attributes.weight_B || 0.8
+          );
       
       // Store the plan
       setTeachingPlan(response.content);
@@ -506,21 +655,24 @@ function App() {
     setIsChatLoading(true);
     try {
         toast.info(`Starting lesson for ${selectedNode.name}...`);
-        
-        // 1. Start teaching
-        const lessonResponse = await api.startLesson(selectedNode.name);
-        setChatMessages([
-            {
-                role: 'assistant',
-                content: lessonResponse.content,
-                sources: lessonResponse.sources || [],
-            }
-        ]);
-
-        // 2. Ask for confirmation instead of immediate quiz
-        setInteractionState('confirm_understanding');
+        // NOTE: 文档模式使用 docStartLesson
+        const lessonResponse = docMode
+          ? await api.docStartLesson(docId, selectedNode.name)
+          : await api.startLesson(currentTopic, selectedNode.name);
+        const step = lessonResponse.current_step ?? 0;
+        const total = lessonResponse.total_steps ?? 0;
+        const stepLabel = total > 0 ? `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n` : '';
+        setChatMessages([{
+            role: 'assistant',
+            content: stepLabel + lessonResponse.content,
+            sources: lessonResponse.sources || [],
+        }]);
+        if (total > 0) {
+            setStepProgress({ current: step, total });
+        }
+        setInteractionState('step_taught');
         setIsPlanView(false);
-        setLessonStarted(true); 
+        setLessonStarted(true);
     } catch (error) {
         toast.error('Failed to start lesson');
         console.error(error);
@@ -533,11 +685,20 @@ function App() {
       if (!selectedNode) return;
       setIsChatLoading(true);
       try {
-          const questionResponse = await api.generateQuestion(selectedNode.name);
+          // NOTE: 文档模式使用 docGenerateQuestion
+          const questionResponse = docMode
+            ? await api.docGenerateQuestion(docId, selectedNode.name)
+            : await api.generateQuestion(currentTopic, selectedNode.name);
           setCurrentQuestion(questionResponse.question);
+
+          // NOTE: 确保选择题选项在 Markdown 中正确换行
+          // 支持 A) 和 A. 两种选项格式
+          const formattedQuestion = questionResponse.question
+              .replace(/\s+([A-D][.)]) /g, '\n\n$1 ');
+
           setChatMessages(prev => [
               ...prev,
-              { role: 'assistant', content: `**Quiz Time!** 🧠\n\n${questionResponse.question}` }
+              { role: 'assistant', content: `**Quiz Time!** 🧠\n\n${formattedQuestion}` }
           ]);
           setInteractionState('quiz');
       } catch (error) {
@@ -550,9 +711,84 @@ function App() {
 
   const handleExplainAgain = () => {
       const message = "我没太明白，能用更简单的例子再讲一遍吗？";
-      handleSendMessage(message); // Reuse chat logic
-      // State remains 'confirm_understanding' so buttons persist (or re-appear after response?)
-      // distinct from 'chat' mode.
+      handleSendMessage(message);
+  };
+
+  const handleReteachStep = async () => {
+      if (!selectedNode) return;
+      setIsChatLoading(true);
+      try {
+          // NOTE: 文档模式使用 docReteach
+          const result = docMode
+            ? await api.docReteach(docId, selectedNode.name)
+            : await api.reteach(currentTopic, selectedNode.name);
+          setChatMessages(prev => [...prev, {
+              role: 'assistant',
+              content: '\uD83D\uDD04 **Reteaching this step**\n\n' + result.content,
+              sources: result.sources || [],
+          }]);
+          setInteractionState('step_taught');
+      } catch (error) {
+          toast.error('Reteach failed');
+          console.error(error);
+      } finally {
+          setIsChatLoading(false);
+      }
+  };
+
+  const handleReteachFromErrors = async () => {
+      if (!selectedNode) return;
+      setIsChatLoading(true);
+      try {
+          // NOTE: 文档模式使用 docReteach
+          const result = docMode
+            ? await api.docReteach(docId, selectedNode.name, lastEvalAnalysis)
+            : await api.reteach(currentTopic, selectedNode.name, lastEvalAnalysis);
+          setChatMessages(prev => [...prev, {
+              role: 'assistant',
+              content: '\uD83D\uDD04 **Reteaching based on errors**\n\n' + result.content,
+              sources: result.sources || [],
+          }]);
+          setInteractionState('step_taught');
+      } catch (error) {
+          toast.error('Reteach failed');
+          console.error(error);
+      } finally {
+          setIsChatLoading(false);
+      }
+  };
+
+  const handleNextStep = async () => {
+      if (!selectedNode) return;
+      setIsChatLoading(true);
+      try {
+          // NOTE: 文档模式使用 docNextStep
+          const result = docMode
+            ? await api.docNextStep(docId, selectedNode.name)
+            : await api.nextStep(currentTopic, selectedNode.name);
+          if (result.is_plan_completed) {
+              setChatMessages(prev => [...prev, { role: 'assistant', content: result.content }]);
+              setStepProgress(null);
+              setInteractionState('chat');
+              toast.success('All steps completed!');
+          } else {
+              const step = result.current_step ?? 0;
+              const total = result.total_steps ?? 0;
+              const stepLabel = total > 0 ? `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n` : '';
+              setChatMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: stepLabel + result.content,
+                  sources: result.sources || [],
+              }]);
+              setStepProgress({ current: step, total });
+              setInteractionState('step_taught');
+          }
+      } catch (error) {
+          toast.error('Failed to advance to next step');
+          console.error(error);
+      } finally {
+          setIsChatLoading(false);
+      }
   };
 
   const updateGraphNodeMastery = (nodeName: string, mastery: number) => {
@@ -641,27 +877,27 @@ function App() {
     try {
       if (interactionState === 'quiz') {
           // Quiz Mode: Evaluate Answer
-          const evaluation = await api.evaluateAnswer(selectedNode.name, currentQuestion, message);
+          // NOTE: 文档模式使用 docEvaluateAnswer
+          const evaluation = docMode
+            ? await api.docEvaluateAnswer(docId, selectedNode.name, currentQuestion, message)
+            : await api.evaluateAnswer(currentTopic, selectedNode.name, currentQuestion, message);
           
-          const feedbackContent = `
-**Assessment Result** 📝
+           const feedbackContent = `
+**测验结果** 📝
 
-*   **Score:** ${Math.round(evaluation.score * 100)}%
-*   **Result:** ${evaluation.is_mastered ? "✅ Mastered" : "📚 Keep Learning"}
+*   **得分：** ${Math.round(evaluation.score * 100)}%
+*   **状态：** ${evaluation.is_mastered ? "✅ 已掌握" : "📚 继续学习"}
 
-**Feedback:**
 ${evaluation.feedback}
-
-**Detailed Analysis:**
-${evaluation.analysis}
-          `;
+           `;
 
           setChatMessages(prev => [
               ...prev,
               { role: 'assistant', content: feedbackContent }
           ]);
           
-          setInteractionState('chat');
+          setLastEvalAnalysis(evaluation.analysis);
+          setInteractionState(stepProgress ? 'step_evaluated' : 'chat');
           
           // Refresh graph and state with NEW MASTERY
           updateGraphNodeMastery(selectedNode.name, evaluation.new_mastery);
@@ -674,7 +910,10 @@ ${evaluation.analysis}
             content: msg.content
           }));
 
-          const response = await api.chat(selectedNode.name, message, history, image);
+          // NOTE: 文档模式使用 docChat
+          const response = docMode
+            ? await api.docChat(docId, selectedNode.name, message, history, image)
+            : await api.chat(currentTopic, selectedNode.name, message, history, image);
           setChatMessages(prev => [...prev, {
             role: 'assistant',
             content: response.response,
@@ -701,7 +940,7 @@ ${evaluation.analysis}
        />
 
        {showLanding ? (
-           <HomePage onStart={() => setShowLanding(false)} />
+           <HomePage onStart={() => setShowLanding(false)} onUploadDoc={() => setIsDialogOpen(true)} />
        ) : (
            <div className="flex flex-col h-full bg-background/50"> {/* Soft background wrapper */}
               <header className="px-6 py-4 flex items-center justify-between bg-transparent z-10 relative">
@@ -793,6 +1032,12 @@ ${evaluation.analysis}
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* 文档模式标识 */}
+                  {docMode && (
+                    <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
+                      📄 {docFilename}
+                    </span>
+                  )}
                   {graphData && (
                     <Button
                       onClick={() => setIsAddNodeDialogOpen(true)}
@@ -885,8 +1130,8 @@ ${evaluation.analysis}
                         )}
 
                         <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "35" : "40"} minSize="10" className="flex flex-col bg-transparent">
-                            <div className="h-full p-0 flex flex-col gap-4">
-                                <div className="flex-1 min-h-0">
+                            <div className="h-full p-0 flex flex-col gap-4 overflow-hidden">
+                                <div className="flex-1 min-h-0 overflow-hidden">
                                     {selectedNode && chatMessages.length === 0 && !teachingPlan ? (
                                         <div className="flex flex-col items-center justify-center h-full text-center space-y-4 p-6 bg-transparent rounded-lg">
                                             <h3 className="text-lg font-semibold">{t('app.confirm_learning', { topic: selectedNode.name })}</h3>
@@ -899,28 +1144,25 @@ ${evaluation.analysis}
                                             </Button>
                                         </div>
                                     ) : (
-                                        <>
-                                            {/* always offer the same button above chat if plan exists and lesson not yet started */}
-                                            {selectedNode && teachingPlan && !lessonStarted && (
-                                                <div className="flex justify-center my-2">
-                                                    <Button onClick={() => handleStartLearning()} disabled={isChatLoading} className="rounded-xl shadow-md">
-                                                        {isChatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                                        {t('app.start_learning_btn')}
-                                                    </Button>
-                                                </div>
-                                            )}
-                                            <ChatInterface 
-                                                messages={chatMessages} 
-                                                onSendMessage={handleSendMessage}
-                                                currentNodeName={selectedNode?.name || null}
-                                                isLoading={isChatLoading}
-                                                showStartLesson={isPlanView}
-                                                onStartLesson={handleConfirmStartLesson}
-                                                interactionState={interactionState}
-                                                onStartQuiz={handleStartQuiz}
-                                                onExplainAgain={handleExplainAgain}
-                                            />
-                                        </>
+                                        <div className="flex flex-col h-full min-h-0">
+                                            <div className="flex-1 min-h-0">
+                                                <ChatInterface 
+                                                    messages={chatMessages} 
+                                                    onSendMessage={handleSendMessage}
+                                                    currentNodeName={selectedNode?.name || null}
+                                                    isLoading={isChatLoading}
+                                                    showStartLesson={isPlanView}
+                                                    onStartLesson={handleConfirmStartLesson}
+                                                    interactionState={interactionState}
+                                                    onStartQuiz={handleStartQuiz}
+                                                    onExplainAgain={handleExplainAgain}
+                                                    onReteachStep={handleReteachStep}
+                                                    onNextStep={handleNextStep}
+                                                    onReteachFromErrors={handleReteachFromErrors}
+                                                    stepProgress={stepProgress}
+                                                />
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -989,17 +1231,21 @@ ${evaluation.analysis}
        )}
        
        <GenerateGraphDialog 
-          open={isDialogOpen} 
-          onOpenChange={setIsDialogOpen}
-          inputTopic={inputTopic}
-          setInputTopic={setInputTopic}
-          inputLevel={inputLevel}
-          setInputLevel={setInputLevel}
-          inputGoal={inputGoal}
-          setInputGoal={setInputGoal}
-          isGenerating={isGenerating}
-          onGenerate={handleGenerateGraph}
-          t={t}
+           open={isDialogOpen} 
+           onOpenChange={setIsDialogOpen}
+           inputTopic={inputTopic}
+           setInputTopic={setInputTopic}
+           inputLevel={inputLevel}
+           setInputLevel={setInputLevel}
+           inputGoal={inputGoal}
+           setInputGoal={setInputGoal}
+           complexity={inputComplexity}
+           setComplexity={setInputComplexity}
+           isGenerating={isGenerating}
+           onGenerate={handleGenerateGraph}
+            onUploadAndGenerate={handleUploadAndGenerate}
+            isDocUploading={isDocUploading}
+           t={t}
        />
        <AddNodeDialog
          open={isAddNodeDialogOpen}

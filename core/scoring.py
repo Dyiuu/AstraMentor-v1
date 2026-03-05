@@ -105,7 +105,8 @@ class ScoringEngine:
             0: 0.40,  # 启蒙阶段：学习快，容易进步
             1: 0.35,  # 基础阶段：稍慢一些
             2: 0.25,  # 进阶阶段：需要更多练习
-            3: 0.15,  # 专家阶段：精益求精，变化小
+        3: 0.18,  # 熟练阶段：精益求精
+        4: 0.12,  # 专家阶段：变化微小
         }
         
         # 时间遗忘配置
@@ -151,12 +152,14 @@ class ScoringEngine:
         """
         if mastery < 0.2:
             stage = 0
-        elif mastery < 0.5:
+        elif mastery < 0.45:
             stage = 1
-        elif mastery < 0.8:
+        elif mastery < 0.7:
             stage = 2
-        else:
+        elif mastery < 0.9:
             stage = 3
+        else:
+            stage = 4
         
         return self.stage_learning_rates.get(stage, self.base_learning_rate)
     
@@ -386,15 +389,15 @@ class ScoringEngine:
             评分等级描述
         """
         if score < 0.2:
-            return "需要加强"
-        elif score < 0.5:
-            return "入门水平"
+            return "🌱 还需努力"
+        elif score < 0.4:
+            return "💡 有所领悟"
+        elif score < 0.6:
+            return "📖 基本掌握"
         elif score < 0.8:
-            return "良好掌握"
-        elif score < 0.95:
-            return "优秀"
+            return "💪 表现不错"
         else:
-            return "完美！"
+            return "🌟 非常出色"
     
     def get_algorithm_explanation(self, result: ScoringResult) -> str:
         """

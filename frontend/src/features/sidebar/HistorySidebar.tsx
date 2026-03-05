@@ -44,8 +44,8 @@ export function HistorySidebar({
                 </h2>
             </div>
             
-            <ScrollArea className="flex-1 p-4">
-                <div className="space-y-3">
+            <ScrollArea className="flex-1 pl-4 pr-5 py-4">
+                <div className="space-y-3 overflow-hidden">
                     {sessions.length === 0 ? (
                         <div className="text-center text-muted-foreground py-8 text-sm">
                             {t('app.no_history')}
@@ -56,17 +56,20 @@ export function HistorySidebar({
                                 key={session.id}
                                 onClick={() => onSelectSession(session.id)}
                                 className={cn(
-                                    "group flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md relative",
+                                    "group flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md relative overflow-hidden",
                                     currentSessionId === session.id 
                                         ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800" 
                                         : "bg-card border-border hover:bg-accent"
                                 )}
                             >
-                                <div className="flex flex-col gap-1 overflow-hidden flex-1 min-w-0 mr-2">
-                                    <span className={cn(
-                                        "font-medium truncate",
-                                        currentSessionId === session.id ? "text-blue-700 dark:text-blue-300" : "text-foreground"
-                                    )}>
+                                <div className="flex flex-col gap-1 overflow-hidden flex-1 w-0 mr-2">
+                                    <span
+                                        title={session.topic}
+                                        className={cn(
+                                            "font-medium block truncate",
+                                            currentSessionId === session.id ? "text-blue-700 dark:text-blue-300" : "text-foreground"
+                                        )}
+                                    >
                                         {session.topic}
                                     </span>
                                     <div className="flex items-center text-xs text-muted-foreground gap-1 mb-1">

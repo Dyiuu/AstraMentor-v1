@@ -200,46 +200,34 @@ class EvaluationAgent:
     ) -> str:
         """
         生成进度反馈信息
-        
-        Args:
-            evaluation_result: 评估结果
-            knowledge_point: 知识点对象
-            
-        Returns:
-            进度反馈文本
+
+        NOTE: 始终使用 knowledge_point.actual_mastery（已被双层评分或 EMA 更新）
         """
-        sr = evaluation_result.scoring_result
-        if sr is None:
-            return evaluation_result.feedback
-        
-        # 构建进度信息
         score_desc = self.scoring_engine.format_score_feedback(
             evaluation_result.score
         )
-        
-        improvement = sr.get_improvement()
-        if improvement > 0:
-            progress_text = f"📈 掌握度提升了 {improvement:.1%}"
-        elif improvement < 0:
-            progress_text = f"📉 掌握度下降了 {abs(improvement):.1%}"
-        else:
-            progress_text = "➡️ 掌握度保持不变"
-        
-        # 目标进度
-        current = sr.new_mastery
+
+        current = knowledge_point.actual_mastery
         target = knowledge_point.target_mastery
+
+        # 目标进度
         if current >= target:
             goal_text = "🎉 恭喜！你已达到学习目标！"
         else:
             remaining = target - current
             goal_text = f"🎯 距离目标还差 {remaining:.1%}"
-        
-        return f"""
-**本次表现**: {score_desc}（{evaluation_result.score:.2f}分）
+
+        # 步骤进度（如果有教学计划）
+        step_text = ""
+        if knowledge_point.teaching_plan:
+            step_idx = knowledge_point.current_step
+            total = len(knowledge_point.teaching_plan)
+            step_text = f"\n📋 教学进度: 第 {step_idx + 1} 步 / 共 {total} 步"
+
+        return f"""**本次表现**: {score_desc}（{evaluation_result.score:.2f}分）
 {evaluation_result.feedback}
 
 **学习进度**: 
-{progress_text}
 当前掌握度: {current:.1%} | 目标: {target:.1%}
-{goal_text}
+{goal_text}{step_text}
 """.strip()

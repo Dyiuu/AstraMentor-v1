@@ -39,7 +39,88 @@ class KnowledgePoint:
     updated_at: str = field(
         default_factory=lambda: datetime.now().isoformat()
     )
-    
+
+    # NOTE: 教学计划相关字段 —— 支持按计划逐步教学
+    # 每个元素为 {"name": str, "content": str, "verification": str}
+    teaching_plan: list = field(default_factory=list)
+
+    # 当前正在进行的步骤索引（从 0 开始）
+    current_step: int = 0
+
+    # 教学计划生成时间（用于判断是否需要重新生成）
+    plan_generated_at: Optional[str] = None
+
+    # NOTE: 双层评分 —— 每步测验分独立记录，支持重考覆盖
+    # step_scores[i] 对应 teaching_plan[i] 的最新测验分 (0.0-1.0)
+    step_scores: list = field(default_factory=list)
+
+    def record_step_score(self, step_index: int, score: float) -> None:
+        """
+        记录某步骤的测验分数（重考时覆盖旧分）
+
+        Args:
+            step_index: 步骤索引
+            score: AI 评分 (0.0-1.0)
+        """
+        # 自动扩展列表长度
+        while len(self.step_scores) <= step_index:
+            self.step_scores.append(0.0)
+        self.step_scores[step_index] = score
+
+    def calculate_weighted_mastery(self) -> float:
+        """
+        根据所有已完成步骤的分数，计算加权全局掌握度
+
+        公式：weighted_avg × completion_factor × target_mastery
+        - 权重递增：weights[i] = 1.0 + i * 0.5（后面步骤更重要）
+        - 完成度系数 = completed_steps / total_steps
+
+        Returns:
+            加权后的全局掌握度 (0.0 - target_mastery)
+        """
+        if not self.step_scores or not self.teaching_plan:
+            return self.actual_mastery
+
+        completed = len(self.step_scores)
+        total = len(self.teaching_plan)
+
+        # NOTE: 步骤权重递增：[1.0, 1.5, 2.0, 2.5, ...]
+        weights = [1.0 + i * 0.5 for i in range(completed)]
+        weighted_sum = sum(s * w for s, w in zip(self.step_scores, weights))
+        weight_total = sum(weights)
+
+        weighted_avg = weighted_sum / weight_total if weight_total > 0 else 0.0
+
+        # NOTE: 完成度系数——未完成全部步骤会压低掌握度
+        completion_factor = completed / total
+
+        return min(
+            weighted_avg * completion_factor * self.target_mastery,
+            self.target_mastery
+        )
+
+    def get_current_plan_step(self) -> Optional[dict]:
+        """
+        获取当前教学步骤
+
+        Returns:
+            当前步骤的 dict，如果所有步骤已完成则返回 None
+        """
+        if not self.teaching_plan or self.current_step >= len(self.teaching_plan):
+            return None
+        return self.teaching_plan[self.current_step]
+
+    def advance_step(self) -> None:
+        """推进到下一个教学步骤"""
+        self.current_step += 1
+        self.updated_at = datetime.now().isoformat()
+
+    def is_plan_completed(self) -> bool:
+        """判断是否已完成教学计划的所有步骤"""
+        if not self.teaching_plan:
+            return True
+        return self.current_step >= len(self.teaching_plan)
+
     def update_mastery(self, new_mastery: float, score: float, feedback: str) -> None:
         """
         更新掌握度并记录历史
@@ -65,23 +146,26 @@ class KnowledgePoint:
     
     def get_teaching_stage(self) -> int:
         """
-        根据当前掌握度获取教学阶段
-        
+        根据当前掌握度获取教学阶段（5 档）
+
         Returns:
             0: 启蒙阶段 (0.0 <= A < 0.2)
-            1: 基础阶段 (0.2 <= A < 0.5)
-            2: 进阶阶段 (0.5 <= A < 0.8)
-            3: 专家阶段 (0.8 <= A <= 1.0)
+            1: 基础阶段 (0.2 <= A < 0.45)
+            2: 进阶阶段 (0.45 <= A < 0.7)
+            3: 熟练阶段 (0.7 <= A < 0.9)
+            4: 专家阶段 (0.9 <= A <= 1.0)
         """
         a = self.actual_mastery
         if a < 0.2:
             return 0
-        elif a < 0.5:
+        elif a < 0.45:
             return 1
-        elif a < 0.8:
+        elif a < 0.7:
             return 2
-        else:
+        elif a < 0.9:
             return 3
+        else:
+            return 4
     
     def to_dict(self) -> dict:
         """转换为字典"""

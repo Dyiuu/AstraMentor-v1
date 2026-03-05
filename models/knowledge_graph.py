@@ -26,6 +26,15 @@ class NodeAttributes(BaseModel):
     )
     description: str = Field(default="", description="知识点描述（AI生成）")
     user_note: str = Field(default="", description="用户个性化备注")
+    # NOTE: 以下两个字段仅在文档模式下使用，主题模式下为空
+    source_chunks: list[str] = Field(
+        default_factory=list,
+        description="关联的原文分块 ID 列表（仅文档模式使用）",
+    )
+    source_text: str = Field(
+        default="",
+        description="节点对应的原文摘要（仅文档模式使用）",
+    )
     last_updated: Optional[str] = Field(
         default_factory=lambda: datetime.now().strftime("%Y-%m-%d"),
         description="最后更新时间",

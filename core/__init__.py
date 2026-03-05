@@ -6,13 +6,14 @@ AstraMentor 核心模块
 
 from .learner_state import LearnerState, KnowledgePoint
 from .scoring import ScoringEngine, TaskDifficulty
-from .prompts import TEACHING_PROMPTS, EVALUATION_PROMPT
+from .prompts import UNIFIED_TEACHING_PROMPT, TEACHING_DIMENSIONS, EVALUATION_PROMPT
 
 __all__ = [
     "LearnerState",
     "KnowledgePoint",
     "ScoringEngine",
     "TaskDifficulty",
-    "TEACHING_PROMPTS",
+    "UNIFIED_TEACHING_PROMPT",
+    "TEACHING_DIMENSIONS",
     "EVALUATION_PROMPT",
 ]

@@ -28,3 +28,6 @@ watchfiles>=0.21.0
 
 # Web Research（联网搜索，通过 DuckDuckGo 实现）
 ddgs>=9.0.0
+
+# PDF 解析
+PyMuPDF>=1.24.0

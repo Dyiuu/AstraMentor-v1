@@ -33,7 +33,11 @@ export const zh = {
     cancel: "取消",
     generate: "生成星图",
     generating_graph: "正在生成个性化星图...",
-    start_generate: "开始生成"
+    start_generate: "开始生成",
+    complexity_label: "知识深度",
+    complexity_simple: "简洁",
+    complexity_standard: "标准",
+    complexity_detailed: "详细"
   },
   graph: {
      enter_topic: "请输入主题以生成知识图谱",
@@ -96,6 +100,27 @@ export const zh = {
     adding: "正在智能扩展星图...",
     success: "节点添加成功",
     fail: "节点添加失败"
+  },
+  doc: {
+    dialog_title: "上传文档",
+    dialog_desc: "上传 PDF 文件（论文、教材等），AI 将基于文件内容生成知识星图。",
+    drop_hint: "拖拽 PDF 文件到此处，或点击选择",
+    file_limit: "仅支持 .pdf 格式，最大 50MB",
+    click_to_change: "点击更换文件",
+    uploading: "正在上传并解析...",
+    generating_graph: "正在基于文档内容生成星图...",
+    start_analyze: "开始分析",
+    upload_btn: "上传文档",
+    mode_label: "文档模式",
+    source_label: "文档原文",
+    upload_success: "文档上传成功",
+    upload_fail: "文档上传失败",
+    home_title: "文档模式",
+    home_desc: "上传 PDF 文件，AI 帮你读懂每一页",
+    tab_topic: "主题模式",
+    tab_doc: "文档模式",
+    level_optional_hint: "可选，例如：零基础 / 有一定基础",
+    goal_optional_hint: "可选，例如：面试冲刺 / 论文精读",
   }
 
 };
@@ -169,7 +194,11 @@ export const en = {
     cancel: "Cancel",
     generate: "Generate",
     generating_graph: "Generating personalized graph...",
-    start_generate: "Start Generating"
+    start_generate: "Start Generating",
+    complexity_label: "Depth",
+    complexity_simple: "Simple",
+    complexity_standard: "Standard",
+    complexity_detailed: "Detailed"
   },
   node_modal: {
       success: "Knowledge point updated",
@@ -198,5 +227,26 @@ export const en = {
     adding: "Expanding graph...",
     success: "Node added successfully",
     fail: "Failed to add node"
+  },
+  doc: {
+    dialog_title: "Upload Document",
+    dialog_desc: "Upload a PDF file (paper, textbook, etc.), AI will generate a knowledge graph based on the content.",
+    drop_hint: "Drop PDF file here, or click to select",
+    file_limit: "PDF only, max 50MB",
+    click_to_change: "Click to change file",
+    uploading: "Uploading and analyzing...",
+    generating_graph: "Generating graph from document...",
+    start_analyze: "Start Analysis",
+    upload_btn: "Upload Doc",
+    mode_label: "Document Mode",
+    source_label: "Source Text",
+    upload_success: "Document uploaded",
+    upload_fail: "Upload failed",
+    home_title: "Document Mode",
+    home_desc: "Upload PDF, AI helps you read every page",
+    tab_topic: "Topic Mode",
+    tab_doc: "Document Mode",
+    level_optional_hint: "Optional, e.g., Beginner / Intermediate",
+    goal_optional_hint: "Optional, e.g., Interview Prep / Paper Study",
   }
 };

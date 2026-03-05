@@ -2,6 +2,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api import router
+from backend.doc_api import doc_router
 
 # NOTE: 配置日志级别，确保项目模块的 INFO 日志可见
 logging.basicConfig(
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+app.include_router(doc_router, prefix="/api/doc")
 
 if __name__ == "__main__":
     import uvicorn

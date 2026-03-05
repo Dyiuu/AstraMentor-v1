@@ -19,10 +19,16 @@ interface ChatInterfaceProps {
   showStartLesson?: boolean;
   onStartLesson?: () => void;
   
-  // New props for feedback flow
-  interactionState?: 'chat' | 'confirm_understanding' | 'quiz';
+  // NOTE: 教学流程交互状态
+  interactionState?: 'chat' | 'confirm_understanding' | 'quiz' | 'step_taught' | 'step_evaluated';
   onExplainAgain?: () => void;
   onStartQuiz?: () => void;
+  // NOTE: 步骤教学回调
+  onReteachStep?: () => void;
+  onNextStep?: () => void;
+  onReteachFromErrors?: () => void;
+  // NOTE: 步骤进度信息
+  stepProgress?: { current: number; total: number } | null;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
@@ -34,7 +40,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onStartLesson,
     interactionState = 'chat',
     onExplainAgain,
-    onStartQuiz
+    onStartQuiz,
+    onReteachStep,
+    onNextStep,
+    onReteachFromErrors,
+    stepProgress,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
@@ -105,8 +115,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }
 
   return (
-    <Card className="flex flex-col h-full shadow-none border-none bg-transparent">
-      <CardHeader className="border-b border-white/10 bg-transparent py-3">
+    <Card className="flex flex-col h-full min-h-0 shadow-none border-none bg-transparent">
+      <CardHeader className="border-b border-white/10 bg-transparent py-3 shrink-0">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <BookOpen className="w-5 h-5 text-primary" />
           {t('chat.learning', {node: currentNodeName}) }
@@ -114,19 +124,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </CardHeader>
       
       {/* Rest of the chat interface... */}
-      <CardContent className="flex-1 overflow-hidden p-0 bg-transparent relative">
+      <CardContent className="flex-1 min-h-0 overflow-hidden p-0 bg-transparent relative">
         <ScrollArea className="h-full p-4">
         {/* ... existing code ... */}
           <div className="flex flex-col gap-4 pb-4">
             {messages.map((msg, index) => (
               <div
                 key={index}
-                className={`flex gap-3 ${
+                className={`flex gap-3 min-w-0 ${
                   msg.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm overflow-hidden break-words ${
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground rounded-tr-none'
                       : 'bg-white/40 border border-white/20 text-foreground rounded-tl-none'
@@ -227,6 +237,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </div>
             )}
 
+            {/* 步骤讲解完毕后：重新讲解 / 检测该步骤 */}
+             {interactionState === 'step_taught' && !isLoading && (
+                 <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300 gap-3 mt-2">
+                     <Button variant="outline" onClick={onReteachStep} className="border-amber-200 text-amber-600 hover:bg-amber-50 hover:text-amber-700">
+                         🔄 重新讲解该步骤
+                     </Button>
+                     <Button onClick={onStartQuiz} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                         ✅ 检测该步骤
+                     </Button>
+                 </div>
+             )}
+
+             {/* 步骤验证评价后：针对错误重新讲解 / 下一步 */}
+             {interactionState === 'step_evaluated' && !isLoading && (
+                 <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300 gap-3 mt-2">
+                     <Button variant="outline" onClick={onReteachFromErrors} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                         🔄 针对错误重新讲解
+                     </Button>
+                     <Button onClick={onNextStep} className="bg-green-600 hover:bg-green-700 text-white shadow-sm">
+                         ➡️ {stepProgress && stepProgress.current + 1 >= stepProgress.total ? '完成学习' : '下一步'}
+                     </Button>
+                 </div>
+             )}
+
             {/* Post-Teaching Feedback Actions */}
              {interactionState === 'confirm_understanding' && !isLoading && (
                  <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300 gap-3 mt-2">
@@ -250,7 +284,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </ScrollArea>
       </CardContent>
-      <CardFooter className="border-t border-white/10 p-4 flex-col gap-2 bg-transparent">
+      <CardFooter className="border-t border-white/10 p-4 flex-col gap-2 bg-transparent shrink-0">
         {selectedImage && (
           <div className="relative w-full flex justify-start animate-in fade-in zoom-in duration-200">
             <div className="relative group">

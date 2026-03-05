@@ -85,9 +85,71 @@ class KnowledgeGraphAgent:
 - 优先与已有图谱中掌握度较高或主题最相关的节点建立连接
 """
 
+    # NOTE: 复杂度档位配置，控制星图生成的节点数量和结构描述
+    # 由前端分段滑块传入，1=简洁，2=标准（默认），3=详细
+    COMPLEXITY_LEVELS = {
+        1: {
+            "node_range": "4-7",
+            "desc": "只保留核心主干知识点，结构尽量简洁，适合快速入门或时间有限的学习者",
+        },
+        2: {
+            "node_range": "8-12",
+            "desc": "覆盖主要分支，保持适中的广度和深度，适合系统学习",
+        },
+        3: {
+            "node_range": "13-20",
+            "desc": "深入展开所有分支和细节，覆盖尽可能完善，适合深度钻研",
+        },
+    }
+
     def __init__(self, api_client: APIClient):
         self.api_client = api_client
         logger.info("KnowledgeGraphAgent 初始化完成")
+
+    def _build_system_instruction(self, complexity: int = 2) -> str:
+        """
+        根据复杂度档位动态生成系统提示词
+
+        NOTE: 将 SYSTEM_INSTRUCTION 模板中的节点数量约束
+        替换为对应档位的范围和结构描述
+        """
+        level = self.COMPLEXITY_LEVELS.get(complexity, self.COMPLEXITY_LEVELS[2])
+        node_range = level["node_range"]
+        desc = level["desc"]
+
+        return f"""你是一位专业的知识星图架构师。
+
+你的任务是：根据用户的学习主题、目标和当前水平，生成一个结构化的知识星图。
+
+输出要求：
+1. 使用 JSON Schema 定义的 KnowledgeGraph 格式
+2. graph.topic 必须填写用户的学习主题
+3. graph.name 设置为 "{{主题}} 学习路线图" 的格式
+4. nodes 包含 {node_range} 个知识节点（{desc}），每个节点需要：
+   - id: 唯一标识符（如 "node_1", "node_2"）
+   - name: 知识点名称（简洁明确）
+   - attributes.weight_A: 根据用户当前水平设置（0.0-1.0）
+     * 如果用户可能已掌握该知识点，设置为 0.6-0.9
+     * 如果用户完全不懂，设置为 0.0-0.2
+   - attributes.weight_B: 根据用户目标设置（0.0-1.0）
+     * 如果该知识点对达成目标很重要，设置为 0.8-0.95
+     * 如果该知识点只需了解即可，设置为 0.5-0.7
+   - attributes.description: 1-2句话描述该知识点的核心内容和学习要点
+   - attributes.user_note: 留空（用于用户后续填写个性化备注）
+5. links 定义节点间的依赖关系：
+   - source: 前置知识节点ID
+   - target: 后续知识节点ID  
+   - reason: 清晰说明为什么存在这个依赖
+   - weight: 依赖强度（0.0-1.0）
+
+设计原则：
+- 节点粒度适中：每个节点是独立的教学单元
+- 依赖清晰：确保是DAG（有向无环图）
+- 个性化：根据用户的当前水平和目标，合理设置每个节点的 weight_A 和 weight_B
+- 循序渐进：确保学习路径符合认知规律（先易后难）
+- 严格层级：尽量只连接相邻或相近层级的节点，避免跨越大层级的"长连接"（例如不要从基础概念直接连到高级应用，中间应有进阶概念过渡）
+- 树状结构：倾向于生成类似二叉树或多叉树的结构，减少网状交叉
+"""
 
     def generate_knowledge_graph(
         self,
@@ -95,6 +157,7 @@ class KnowledgeGraphAgent:
         learning_goal: str = "",
         current_level: str = "零基础",
         target_level: str = "掌握核心概念",
+        complexity: int = 2,
     ) -> Dict[str, Any]:
         """
         生成知识星图
@@ -104,6 +167,7 @@ class KnowledgeGraphAgent:
             learning_goal: 学习目的（如"用于开发高性能Web服务"）
             current_level: 当前水平描述（如"零基础"、"了解基础语法"、"有一定项目经验"）
             target_level: 目标水平描述（如"掌握核心概念"、"能独立开发项目"、"达到专家水平"）
+            complexity: 复杂度档位（1=简洁 2=标准 3=详细）
 
         Returns:
             图谱数据字典（从 Pydantic 模型转换）
@@ -119,7 +183,10 @@ class KnowledgeGraphAgent:
 
 请为我生成个性化的知识星图。"""
 
-        logger.info(f"正在为主题 '{topic}' 生成知识星图...")
+        logger.info(f"正在为主题 '{topic}' 生成知识星图（复杂度: {complexity}）...")
+
+        # NOTE: 根据复杂度档位动态构建系统提示词
+        system_instruction = self._build_system_instruction(complexity)
 
         try:
             # NOTE: 先联网搜索获取背景知识，再注入 prompt 生成结构化 JSON
@@ -143,7 +210,7 @@ class KnowledgeGraphAgent:
             # 使用结构化输出
             graph_model = self.api_client.generate_json(
                 prompt=prompt,
-                system_instruction=self.SYSTEM_INSTRUCTION,
+                system_instruction=system_instruction,
                 temperature=0.2,
                 output_schema=KnowledgeGraph,
             )
