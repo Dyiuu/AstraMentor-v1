@@ -7,6 +7,9 @@ import { NodeDetailsModal } from './features/graph/NodeDetailsModal';
 import { AddNodeDialog } from './features/graph/AddNodeDialog';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ChatInterface from './features/chat/ChatInterface';
@@ -1088,7 +1091,8 @@ ${evaluation.feedback}
                                                 <ScrollArea className="h-full pr-4">
                                                     <div className="text-sm text-foreground leading-relaxed ai-content">
                                                         <ReactMarkdown 
-                                                            remarkPlugins={[remarkGfm]}
+                                                            remarkPlugins={[remarkGfm, remarkMath]}
+                                                            rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
                                                             components={{
                                                                 ul: ({node, ...props}) => <ul className="list-disc pl-8 my-2" {...props} />,
                                                                 ol: ({node, ...props}) => <ol className="list-decimal pl-8 my-2" {...props} />,

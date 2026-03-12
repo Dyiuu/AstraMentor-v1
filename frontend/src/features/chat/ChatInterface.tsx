@@ -8,6 +8,9 @@ import { Send, BookOpen, X, Paperclip, Globe, ExternalLink } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -53,7 +56,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const { t } = useLanguage();
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   useEffect(() => {
@@ -144,7 +147,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 >
                   <div className="prose prose-sm dark:prose-invert max-w-none break-words ai-content">
                     <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
                         components={{
                             ul: ({node, ...props}) => <ul className="list-disc pl-8 my-2 space-y-1" {...props} />,
                             ol: ({node, ...props}) => <ol className="list-decimal pl-8 my-2 space-y-1" {...props} />,

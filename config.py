@@ -24,7 +24,12 @@ except ImportError:
 class APIConfig:
     """API配置类"""
 
-    # Antigravity 代理地址
+    # 模型提供商：gemini / zhipu
+    provider: str = field(
+        default_factory=lambda: os.getenv("ASTRA_PROVIDER", "gemini")
+    )
+
+    # API 端点地址
     api_endpoint: str = field(
         default_factory=lambda: os.getenv("ASTRA_API_ENDPOINT", "http://127.0.0.1:8045")
     )

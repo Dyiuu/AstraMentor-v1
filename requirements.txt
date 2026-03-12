@@ -3,6 +3,9 @@
 # Google Generative AI SDK
 google-genai>=0.5.0
 
+# OpenAI 兼容 SDK（用于智谱 GLM、通义千问 Qwen 等 OpenAI 兼容接口）
+openai>=1.30.0
+
 # 环境变量管理
 python-dotenv>=1.0.0
 

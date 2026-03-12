@@ -4,6 +4,8 @@
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Google_AI-Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini">
+  <img src="https://img.shields.io/badge/智谱_AI-GLM--5-green?style=for-the-badge" alt="GLM">
+  <img src="https://img.shields.io/badge/通义千问-Qwen3.5-orange?style=for-the-badge" alt="Qwen">
   <img src="https://img.shields.io/badge/License-AGPL%20v3-blue?style=for-the-badge" alt="License">
 </p>
 
@@ -129,11 +131,15 @@ graph TD
         Service <--> DB[(Learner State JSON)]
     end
 
-    subgraph "AI Models"
-        KA --> Gemini[Google Gemini]
-        TA --> Gemini
-        EA --> Gemini
-        DGA --> Gemini
+    subgraph "AI Models (Provider 分发)"
+        KA --> AC[APIClient]
+        TA --> AC
+        EA --> AC
+        DGA --> AC
+        AC -->|gemini| Gemini[Google Gemini]
+        AC -->|zhipu| GLM[智谱 GLM]
+        AC -->|qwen| Qwen[通义千问 Qwen]
+        AC -->|其他| OAI[任意 OpenAI 兼容]
     end
 
     subgraph "Web Research"
@@ -151,7 +157,15 @@ graph TD
 
 - **Python**: 3.10 或更高版本
 - **Node.js**: 16.0 或更高版本
-- **Google API Key**: 需要开通 Gemini API 权限
+- **AI 模型 API Key**（任选一个即可）：
+
+  | 提供商 | 模型示例 | 获取方式 |
+  |--------|----------|----------|
+  | Google Gemini | `gemini-2.5-flash` | [Google AI Studio](https://aistudio.google.com/) |
+  | 智谱 AI (GLM) | `glm-5` | [智谱开放平台](https://open.bigmodel.cn/) |
+  | 通义千问 (Qwen) | `qwen3.5-plus` | [阿里云百炼](https://dashscope.aliyun.com/) |
+  | 其他 OpenAI 兼容 | — | 只需 API Key + Endpoint 即可 |
+
 - **Compilers** (可选, 用于在线 IDE):
   - GCC (C/C++)
   - Go
@@ -175,13 +189,36 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 4. 配置环境变量
-# 复制 .env.example 为 .env，填入你的 GOOGLE_API_KEY
+# 复制 .env.example 为 .env，填入你的模型提供商和 API Key
 copy .env.example .env
+# 编辑 .env，设置 ASTRA_PROVIDER / ASTRA_API_KEY / ASTRA_API_ENDPOINT / ASTRA_MODEL_NAME
 # 可选：关闭联网搜索功能
 # 在 .env 中设置 ASTRA_WEB_SEARCH_ENABLED=false
 
 # 5. 启动后端服务
 uvicorn backend.app:app --reload
+```
+
+#### 环境变量配置示例
+
+```env
+# ========== 使用 Gemini ==========
+ASTRA_PROVIDER=gemini
+ASTRA_API_KEY=your-gemini-key
+ASTRA_API_ENDPOINT=https://generativelanguage.googleapis.com
+ASTRA_MODEL_NAME=gemini-2.5-flash
+
+# ========== 使用智谱 GLM ==========
+ASTRA_PROVIDER=zhipu
+ASTRA_API_KEY=your-zhipu-key
+ASTRA_API_ENDPOINT=https://open.bigmodel.cn/api/paas/v4/
+ASTRA_MODEL_NAME=glm-5
+
+# ========== 使用通义千问 Qwen ==========
+ASTRA_PROVIDER=qwen
+ASTRA_API_KEY=your-qwen-key
+ASTRA_API_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
+ASTRA_MODEL_NAME=qwen3.5-plus
 ```
 
 后端服务将在 `http://127.0.0.1:8000` 启动。
@@ -250,7 +287,7 @@ AstraMentor-v1/
 │   ├── pdf_parser.py          # PDF 解析服务 [NEW]
 │   └── code_runner.py         # 代码沙箱执行
 ├── 📂 utils/                   # 工具模块
-│   ├── api_client.py          # Google GenAI SDK 客户端
+│   ├── api_client.py          # 多模型 Provider 统一客户端（Gemini / GLM / Qwen）
 │   └── web_research.py        # 联网搜索 (DuckDuckGo)
 ├── 📂 frontend/                # React 前端代码
 │   ├── src/
