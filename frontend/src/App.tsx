@@ -42,6 +42,9 @@ interface FullGraphSession extends GraphSession {
     learnerState: LearnerState | null;
     // NOTE: 内部主题 ID，主题模式为主题名，文档模式为 doc_{hash}
     internalTopic?: string;
+    // NOTE: 项目模式下保存项目描述
+    projectMode?: boolean;
+    projectDescription?: string;
 }
 
 function App() {
@@ -82,6 +85,11 @@ function App() {
   const [docId, setDocId] = useState('');               // 当前文档 ID
   const [docFilename, setDocFilename] = useState('');   // 当前文档文件名
   const [isDocUploading, setIsDocUploading] = useState(false);
+
+  // ======== 项目模式状态 ========
+  const [projectMode, setProjectMode] = useState(false);
+  const [projectDescription, setProjectDescription] = useState('');
+  const [inputProjectDesc, setInputProjectDesc] = useState('');
 
  
   // UI States for Learning Flow
@@ -268,6 +276,9 @@ function App() {
       const existingSession = graphSessions.find(s => s.id === currentSessionId);
       const displayTopic = existingSession?.topic
         || (docMode && docFilename ? `📄 ${docFilename}` : '')
+        || (projectMode && projectDescription
+           ? `🚀 ${(graphData as any)?.graph?.topic || projectDescription.slice(0, 20)}`
+           : '')
         || currentTopic
         || "未命名星图";
 
@@ -281,7 +292,9 @@ function App() {
           learningGoal: currentGoal,
           currentLevel: currentGraphLevel,
           learnerState,
-          averageMastery: calculateAverageMastery(graphData.nodes)
+          averageMastery: calculateAverageMastery(graphData.nodes),
+          projectMode,
+          projectDescription,
       };
 
       setGraphSessions(prev => {
@@ -321,10 +334,12 @@ function App() {
       setChatMessages([]);
       setTeachingPlan(null);
       setCurrentSessionId(newSessionId);
-      // NOTE: 主题模式生成时必须清除文档模式状态，避免串台
+      // NOTE: 主题模式生成时必须清除文档模式和项目模式状态，避免串台
       setDocMode(false);
       setDocId('');
       setDocFilename('');
+      setProjectMode(false);
+      setProjectDescription('');
       
       // Update active session metadata
       setCurrentTopic(inputTopic);
@@ -429,6 +444,76 @@ function App() {
   };
 
   /**
+   * 项目模式：根据项目描述生成技能学习路径星图
+   */
+  const handleGenerateProjectGraph = async () => {
+    if (!inputProjectDesc.trim()) return;
+
+    if (graphData) saveCurrentSession();
+
+    setIsGenerating(true);
+    setIsDialogOpen(false);
+    const newSessionId = Date.now().toString();
+
+    try {
+      toast.info(t('project.generating'));
+      const data = await api.generateProjectGraph(
+        inputProjectDesc,
+        inputLevel || '零基础',
+        inputComplexity
+      );
+
+      // 切换到项目模式
+      setProjectMode(true);
+      setProjectDescription(inputProjectDesc);
+      setDocMode(false);
+      setDocId('');
+      setDocFilename('');
+
+      // 重置状态
+      setGraphData(data);
+      setNodeSessions({});
+      setSelectedNode(null);
+      setChatMessages([]);
+      setTeachingPlan(null);
+      setCurrentSessionId(newSessionId);
+      // NOTE: 项目模式的 topic 使用项目描述前 50 字符作为内部 ID
+      const safeTopic = inputProjectDesc.slice(0, 50);
+      setCurrentTopic(safeTopic);
+      setCurrentGoal('');
+      setCurrentGraphLevel(inputLevel);
+
+      // NOTE: 使用 AI 生成的 graph.topic 作为项目简短标题，而非截断用户输入
+      const projectTitle = (data as any).graph?.topic || inputProjectDesc.slice(0, 20);
+
+      const newSession: FullGraphSession = {
+        id: newSessionId,
+        topic: `🚀 ${projectTitle}`,
+        internalTopic: safeTopic,
+        date: new Date().toISOString(),
+        graphData: data,
+        nodeSessions: {},
+        learningGoal: '',
+        currentLevel: inputLevel,
+        learnerState,
+        averageMastery: calculateAverageMastery(data.nodes),
+        projectMode: true,
+        projectDescription: inputProjectDesc,
+      };
+      setGraphSessions(prev => [newSession, ...prev]);
+      setShowLanding(false);
+      toast.success('项目技能路径星图生成成功！');
+    } catch (error) {
+      toast.error('Failed to generate project graph');
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
+      setInputProjectDesc('');
+      setInputLevel('');
+    }
+  };
+
+  /**
    * 处理用户手动添加节点请求
    * NOTE: 调用后端 AI 扩展 API，生成中间过渡节点并融入现有图谱
    */
@@ -486,21 +571,29 @@ function App() {
       const session = graphSessions.find(s => s.id === sessionId);
       if (!session) return;
 
-      // NOTE: 判断是否为文档模式会话，正确恢复 docMode 状态
+      // NOTE: 判断是否为文档模式会话，正确恢复各模式状态
       const isDocSession = session.topic.startsWith('📄 ');
       if (isDocSession) {
-          // 从 learningGoal 或 currentLevel 中恢复 doc_id（如果存储了的话）
-          // 或者从内部 topic（doc_xxx）中提取
           setDocMode(true);
-          // 从 graphData 内部的 topic 字段提取 doc_id
           const storedTopic = session.internalTopic || '';
           const docIdMatch = storedTopic.match(/doc_([a-f0-9]+)/);
           setDocId(docIdMatch ? docIdMatch[1] : '');
           setDocFilename(session.topic.replace('📄 ', ''));
+          setProjectMode(false);
+          setProjectDescription('');
+      } else if (session.projectMode) {
+          // NOTE: 恢复项目模式状态
+          setProjectMode(true);
+          setProjectDescription(session.projectDescription || '');
+          setDocMode(false);
+          setDocId('');
+          setDocFilename('');
       } else {
           setDocMode(false);
           setDocId('');
           setDocFilename('');
+          setProjectMode(false);
+          setProjectDescription('');
       }
 
       // Restore session
@@ -628,7 +721,8 @@ function App() {
             attributes.description || '', 
             userNote || attributes.user_note || '',
             attributes.weight_A || 0,
-            attributes.weight_B || 0.8
+            attributes.weight_B || 0.8,
+            projectMode ? projectDescription : '',
           );
       
       // Store the plan
@@ -724,7 +818,8 @@ function App() {
           // NOTE: 文档模式使用 docReteach
           const result = docMode
             ? await api.docReteach(docId, selectedNode.name)
-            : await api.reteach(currentTopic, selectedNode.name);
+            : await api.reteach(currentTopic, selectedNode.name, '',
+                projectMode ? projectDescription : '');
           setChatMessages(prev => [...prev, {
               role: 'assistant',
               content: '\uD83D\uDD04 **Reteaching this step**\n\n' + result.content,
@@ -746,7 +841,8 @@ function App() {
           // NOTE: 文档模式使用 docReteach
           const result = docMode
             ? await api.docReteach(docId, selectedNode.name, lastEvalAnalysis)
-            : await api.reteach(currentTopic, selectedNode.name, lastEvalAnalysis);
+            : await api.reteach(currentTopic, selectedNode.name, lastEvalAnalysis,
+                projectMode ? projectDescription : '');
           setChatMessages(prev => [...prev, {
               role: 'assistant',
               content: '\uD83D\uDD04 **Reteaching based on errors**\n\n' + result.content,
@@ -916,7 +1012,8 @@ ${evaluation.feedback}
           // NOTE: 文档模式使用 docChat
           const response = docMode
             ? await api.docChat(docId, selectedNode.name, message, history, image)
-            : await api.chat(currentTopic, selectedNode.name, message, history, image);
+            : await api.chat(currentTopic, selectedNode.name, message, history, image,
+                projectMode ? projectDescription : '');
           setChatMessages(prev => [...prev, {
             role: 'assistant',
             content: response.response,
@@ -1039,6 +1136,12 @@ ${evaluation.feedback}
                   {docMode && (
                     <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
                       📄 {docFilename}
+                    </span>
+                  )}
+                  {/* 项目模式标识 */}
+                  {projectMode && (
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium truncate max-w-[200px]" title={projectDescription}>
+                      🚀 {t('project.mode_label')}
                     </span>
                   )}
                   {graphData && (
@@ -1246,10 +1349,13 @@ ${evaluation.feedback}
            complexity={inputComplexity}
            setComplexity={setInputComplexity}
            isGenerating={isGenerating}
-           onGenerate={handleGenerateGraph}
+            onGenerate={handleGenerateGraph}
             onUploadAndGenerate={handleUploadAndGenerate}
             isDocUploading={isDocUploading}
-           t={t}
+            inputProjectDesc={inputProjectDesc}
+            setInputProjectDesc={setInputProjectDesc}
+            onGenerateProject={handleGenerateProjectGraph}
+            t={t}
        />
        <AddNodeDialog
          open={isAddNodeDialogOpen}

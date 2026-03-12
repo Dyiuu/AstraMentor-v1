@@ -9,6 +9,7 @@ from agents.evaluation_agent import EvaluationAgent
 from agents.knowledge_graph_agent import KnowledgeGraphAgent
 from core.learner_state import LearnerState, KnowledgePoint
 from core.constants import LearningLevel
+from core.prompts import build_project_context_injection
 from utils.api_client import APIClient
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,38 @@ class LearningService:
             return graph_data
         except Exception as e:
             logger.error(f"Failed to generate knowledge graph: {e}")
+            return None
+
+    def generate_project_graph(
+        self,
+        project_description: str,
+        current_level: str = "零基础",
+        complexity: int = 2,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        根据项目描述生成技能学习路径星图
+
+        NOTE: 委托给 KnowledgeGraphAgent.generate_project_graph() 并持久化结果
+        """
+        try:
+            graph_data = self.knowledge_graph.generate_project_graph(
+                project_description=project_description,
+                current_level=current_level,
+                complexity=complexity,
+            )
+
+            # 持久化到磁盘
+            test_data_dir = Path("test_data")
+            test_data_dir.mkdir(exist_ok=True)
+            safe_topic = project_description[:50].replace(' ', '_').replace('/', '_')
+            graph_filename = f"knowledge_graph_{safe_topic}.json"
+            graph_file = test_data_dir / graph_filename
+            with open(graph_file, "w", encoding="utf-8") as f:
+                json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+            return graph_data
+        except Exception as e:
+            logger.error(f"Failed to generate project graph: {e}")
             return None
 
     def save_graph(self, topic: str, graph_data: Dict[str, Any]) -> bool:
@@ -187,6 +220,7 @@ class LearningService:
         target_mastery: float = 0.8,
         current_mastery: float = 0.0,
         graph_data: Optional[Dict[str, Any]] = None,
+        project_description: str = "",
     ) -> KnowledgePoint:
         """Initializes or retrieves a knowledge point for learning."""
         combined_note = node_description
@@ -201,7 +235,8 @@ class LearningService:
         )
         
         # New flow: Return Teaching Plan instead of just the KP
-        return self.generate_teaching_plan(kp, graph_data=graph_data)
+        return self.generate_teaching_plan(kp, graph_data=graph_data,
+                                           project_description=project_description)
 
     def update_knowledge_point(
         self,
@@ -238,6 +273,7 @@ class LearningService:
         self,
         knowledge_point: KnowledgePoint,
         graph_data: Optional[Dict[str, Any]] = None,
+        project_description: str = "",
     ) -> str:
         """Generates a teaching plan for a knowledge point."""
         context = self.build_learner_context(knowledge_point.name, graph_data)
@@ -245,6 +281,10 @@ class LearningService:
             logger.info(
                 f"📋 为教学计划 '{knowledge_point.name}' 注入前置知识上下文:\n{context}"
             )
+        # NOTE: 项目模式下注入项目上下文
+        project_context = build_project_context_injection(project_description)
+        if project_context:
+            context = (context + "\n" + project_context) if context else project_context
         plan_obj = self.teacher.generate_teaching_plan(knowledge_point, context=context)
 
         # NOTE: 将结构化的教学计划持久化到 KnowledgePoint
@@ -390,6 +430,7 @@ class LearningService:
         self,
         knowledge_point: KnowledgePoint,
         error_analysis: str = "",
+        project_description: str = "",
     ) -> Dict[str, Any]:
         """
         针对用户的错误，重新讲解当前步骤
@@ -397,13 +438,15 @@ class LearningService:
         Args:
             knowledge_point: 知识点对象
             error_analysis: 评价中的错误分析（可选）
+            project_description: 项目描述（项目模式下传入）
 
         Returns:
             包含 content 和 sources 的字典
         """
         plan_step = knowledge_point.get_current_plan_step()
         return self.teacher.reteach_from_errors(
-            knowledge_point, plan_step=plan_step, error_analysis=error_analysis
+            knowledge_point, plan_step=plan_step, error_analysis=error_analysis,
+            project_context=build_project_context_injection(project_description),
         )
 
     def advance_and_teach(self, knowledge_point: KnowledgePoint) -> Dict[str, Any]:
@@ -437,7 +480,8 @@ class LearningService:
         teaching_content: str,
         question: str,
         image: Optional[str] = None,
-        history: List[Dict[str, str]] = None
+        history: List[Dict[str, str]] = None,
+        project_description: str = "",
     ) -> Dict[str, Any]:
         """
         处理用户讨论问题
@@ -450,7 +494,8 @@ class LearningService:
             teaching_content=teaching_content,
             question=question,
             image=image,
-            discussion_history=history
+            discussion_history=history,
+            project_context=build_project_context_injection(project_description),
         )
 
     def generate_question(self, knowledge_point: KnowledgePoint) -> str:

@@ -27,14 +27,15 @@ export const api = {
         return response.data;
     },
 
-    startLearning: async (topic: string, nodeName: string, description: string, userNote: string, current: number, target: number) => {
+    startLearning: async (topic: string, nodeName: string, description: string, userNote: string, current: number, target: number, projectDescription: string = '') => {
         const response = await client.post<{ content: string }>('/learning/start', {
             topic,
             node_name: nodeName,
             node_description: description,
             user_note: userNote,
             current_mastery: current,
-            target_mastery: target
+            target_mastery: target,
+            project_description: projectDescription,
         });
         return response.data;
     },
@@ -61,11 +62,12 @@ export const api = {
     },
 
     /** 根据错误分析重新讲解当前步骤 */
-    reteach: async (topic: string, nodeName: string, errorAnalysis: string = '') => {
+    reteach: async (topic: string, nodeName: string, errorAnalysis: string = '', projectDescription: string = '') => {
         const response = await client.post<{ content: string; sources?: GroundingSource[] }>('/learning/reteach', {
             topic,
             node_name: nodeName,
             error_analysis: errorAnalysis,
+            project_description: projectDescription,
         });
         return response.data;
     },
@@ -81,13 +83,14 @@ export const api = {
         return response.data;
     },
 
-    chat: async (topic: string, nodeName: string, question: string, history: any[], image?: string) => {
+    chat: async (topic: string, nodeName: string, question: string, history: any[], image?: string, projectDescription: string = '') => {
         const response = await client.post<{ response: string; sources?: GroundingSource[] }>('/learning/chat', {
             topic,
             node_name: nodeName,
             question,
             image,
-            history
+            history,
+            project_description: projectDescription,
         });
         return response.data;
     },
@@ -154,6 +157,16 @@ export const api = {
             target_mastery: targetMastery,
             user_note: userNote,
             existing_graph: existingGraph
+        });
+        return response.data;
+    },
+
+    /** 项目模式：根据项目描述生成技能学习路径星图 */
+    generateProjectGraph: async (projectDescription: string, currentLevel: string, complexity: number = 2) => {
+        const response = await client.post<GraphData>('/graph/generate-project', {
+            project_description: projectDescription,
+            current_level: currentLevel,
+            complexity,
         });
         return response.data;
     },

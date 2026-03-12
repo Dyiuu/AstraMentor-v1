@@ -49,8 +49,9 @@ def web_search(query: str, max_results: int = 5) -> List[dict]:
         logger.info(f"DuckDuckGo 搜索 '{query[:50]}...' 返回 {len(results)} 条结果")
         return results
 
-    except ImportError:
-        logger.error("ddgs 未安装，请运行: pip install ddgs")
+    except ImportError as e:
+        import traceback
+        logger.error(f"ddgs 导入失败: {e}\n{traceback.format_exc()}")
         return []
     except Exception as e:
         logger.warning(f"DuckDuckGo 搜索失败: {e}")

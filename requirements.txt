@@ -1,4 +1,4 @@
-# AstraMentor 多 Agent 教学系统依赖
+﻿# AstraMentor 多 Agent 教学系统依赖
 
 # Google Generative AI SDK
 google-genai>=0.5.0
@@ -34,3 +34,4 @@ ddgs>=9.0.0
 
 # PDF 解析
 PyMuPDF>=1.24.0
+

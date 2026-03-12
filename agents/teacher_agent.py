@@ -102,7 +102,8 @@ class TeacherAgent:
         self,
         knowledge_point: KnowledgePoint,
         plan_step: Optional[Dict[str, str]] = None,
-        context: str = ""
+        context: str = "",
+        project_context: str = "",
     ) -> Dict[str, Any]:
         """
         进行教学
@@ -114,6 +115,7 @@ class TeacherAgent:
             knowledge_point: 知识点对象
             plan_step: 当前教学计划步骤 dict（可选）
             context: 额外的上下文信息
+            project_context: 项目上下文注入文本（项目模式下传入）
             
         Returns:
             包含 content 和 sources 的字典
@@ -125,6 +127,9 @@ class TeacherAgent:
             topic=knowledge_point.name,
             current_score=knowledge_point.actual_mastery
         )
+        # NOTE: 项目模式下将项目上下文追加到系统提示词
+        if project_context:
+            system_instruction += f"\n\n{project_context}"
         
         user_prompt = f"请讲解知识点：{knowledge_point.name}"
         if knowledge_point.note:
@@ -235,7 +240,8 @@ D) 第四个选项
         self,
         knowledge_point: KnowledgePoint,
         plan_step: Optional[Dict[str, str]] = None,
-        error_analysis: str = ""
+        error_analysis: str = "",
+        project_context: str = "",
     ) -> Dict[str, Any]:
         """
         针对用户的错误，重新讲解当前步骤的薄弱环节
@@ -255,6 +261,9 @@ D) 第四个选项
             topic=knowledge_point.name,
             current_score=knowledge_point.actual_mastery
         )
+        # NOTE: 项目模式下将项目上下文追加到系统提示词
+        if project_context:
+            system_instruction += f"\n\n{project_context}"
 
         user_prompt = f"""请针对学习者在以下知识点上的薄弱环节重新讲解：
 
@@ -335,7 +344,8 @@ D) 第四个选项
         teaching_content: str,
         question: str,
         image: Optional[str] = None,
-        discussion_history: list = None
+        discussion_history: list = None,
+        project_context: str = "",
     ) -> Dict[str, Any]:
         """
         讨论环节
@@ -360,6 +370,9 @@ D) 第四个选项
             topic=knowledge_point.name,
             current_score=knowledge_point.actual_mastery
         )
+        # NOTE: 项目模式下将项目上下文追加到系统提示词
+        if project_context:
+            system_instruction += f"\n\n{project_context}"
         
         prompt = """基于以下教学内容，回答用户的疑问：
             【教学内容】

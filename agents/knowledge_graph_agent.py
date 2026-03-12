@@ -1,6 +1,6 @@
 """
 KnowledgeGraph Agent - 知识星图生成器
-生成topic下的知识节点及依赖关系
+生成topic下的知识节点及依赖关系，支持主题模式和项目模式
 """
 
 import logging
@@ -10,6 +10,7 @@ from utils.api_client import APIClient
 from models.knowledge_graph import KnowledgeGraph, ExpandGraphResult
 from config import get_config
 from utils.web_research import build_research_context
+from core.prompts import get_project_graph_system_instruction
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +223,74 @@ class KnowledgeGraphAgent:
 
         except Exception as e:
             logger.error(f"❌ 知识星图生成失败: {e}")
+            raise
+
+    def generate_project_graph(
+        self,
+        project_description: str,
+        current_level: str = "零基础",
+        complexity: int = 2,
+    ) -> Dict[str, Any]:
+        """
+        根据项目描述生成学习路径星图
+
+        NOTE: 与 generate_knowledge_graph 不同，此方法按「完成项目所需技能」
+        组织节点，每个节点代表一项具体技能而非知识概念。
+
+        Args:
+            project_description: 用户想要完成的项目描述
+            current_level: 当前水平描述（如"零基础"、"有一定编程经验"）
+            complexity: 复杂度档位（1=简洁 2=标准 3=详细）
+
+        Returns:
+            图谱数据字典（与 generate_knowledge_graph 格式一致）
+        """
+        prompt = f"""用户想要完成的项目：
+{project_description}
+
+用户的当前水平：{current_level}
+
+请分析这个项目需要哪些技能，并生成一个面向项目完成的技能学习路径图。"""
+
+        logger.info(f"正在为项目生成技能路径星图（复杂度: {complexity}）...")
+
+        system_instruction = get_project_graph_system_instruction(complexity)
+
+        try:
+            # NOTE: 联网搜索项目相关技术栈信息
+            research_context = ""
+            config = get_config()
+            if config.api.web_search_enabled:
+                try:
+                    # 提取项目关键词用于搜索
+                    research_context = build_research_context(
+                        f"{project_description} 技术栈 所需技能 学习路线",
+                        max_results=5,
+                    )
+                    if research_context:
+                        logger.info("✅ 项目技术栈搜索预研完成")
+                except Exception as e:
+                    logger.warning(f"搜索预研失败，回退到无搜索模式: {e}")
+
+            if research_context:
+                prompt += f"\n\n【联网搜索参考资料】\n{research_context}\n\n请基于以上搜索结果，生成更准确的项目技能路径图。"
+
+            graph_model = self.api_client.generate_json(
+                prompt=prompt,
+                system_instruction=system_instruction,
+                temperature=0.2,
+                output_schema=KnowledgeGraph,
+            )
+
+            graph_data = graph_model.model_dump()
+
+            logger.info(
+                f"✅ 项目技能路径星图生成成功，包含 {len(graph_data['nodes'])} 个节点"
+            )
+            return graph_data
+
+        except Exception as e:
+            logger.error(f"❌ 项目技能路径星图生成失败: {e}")
             raise
 
     def expand_graph(

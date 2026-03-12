@@ -15,6 +15,7 @@ class StartLearningRequest(BaseModel):
     user_note: Optional[str] = ""
     target_mastery: float = 0.8
     current_mastery: float = 0.0
+    project_description: Optional[str] = ""  # 项目模式下的项目描述
 
 class UpdateNodeRequest(BaseModel):
     topic: str = ""
@@ -29,18 +30,21 @@ class ChatRequest(BaseModel):
     question: str
     image: Optional[str] = None
     history: List[Dict[str, str]] = []
+    project_description: Optional[str] = ""  # 项目模式下的项目描述
 
 class EvaluateRequest(BaseModel):
     topic: str = ""
     node_name: str
     question: str
     answer: str
+    project_description: Optional[str] = ""  # 项目模式下的项目描述
 
 class ReteachRequest(BaseModel):
     """根据错误分析重新讲解当前步骤"""
     topic: str = ""
     node_name: str
     error_analysis: str = ""
+    project_description: Optional[str] = ""  # 项目模式下的项目描述
 
 class GroundingSource(BaseModel):
     """搜索引用来源"""
@@ -87,6 +91,13 @@ class AddNodeRequest(BaseModel):
     target_mastery: float = 0.8
     user_note: str = ""
     existing_graph: Dict[str, Any]
+
+
+class GenerateProjectGraphRequest(BaseModel):
+    """项目模式星图生成请求"""
+    project_description: str  # 用户的项目描述
+    current_level: str = "零基础"
+    complexity: int = 2  # 1=简洁 2=标准 3=详细
 
 
 # ============================================================================

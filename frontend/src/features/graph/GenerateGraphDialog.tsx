@@ -4,7 +4,8 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { SteppedSlider } from "../../components/ui/stepped-slider";
-import { Loader2, Sparkles, FileUp, Upload, FileText, CheckCircle2 } from "lucide-react";
+import { Loader2, Sparkles, FileUp, Upload, FileText, CheckCircle2, Rocket } from "lucide-react";
+import { Textarea } from "../../components/ui/textarea";
 
 interface GenerateGraphDialogProps {
   open: boolean;
@@ -23,6 +24,11 @@ interface GenerateGraphDialogProps {
   onUploadAndGenerate?: (file: File, complexity: number, level: string, goal: string) => void;
   /** 文档上传中 */
   isDocUploading?: boolean;
+  /** 项目模式：项目描述输入 */
+  inputProjectDesc?: string;
+  setInputProjectDesc?: (value: string) => void;
+  /** 项目模式：生成项目星图 */
+  onGenerateProject?: () => void;
   t: (key: string) => string;
 }
 
@@ -46,10 +52,13 @@ export function GenerateGraphDialog({
   onGenerate,
   onUploadAndGenerate,
   isDocUploading = false,
+  inputProjectDesc = '',
+  setInputProjectDesc,
+  onGenerateProject,
   t
 }: GenerateGraphDialogProps) {
-  // NOTE: Tab 模式：'topic' = 主题模式，'doc' = 文档模式
-  const [mode, setMode] = useState<'topic' | 'doc'>('topic');
+  // NOTE: Tab 模式：'topic' = 主题模式，'doc' = 文档模式，'project' = 项目模式
+  const [mode, setMode] = useState<'topic' | 'doc' | 'project'>('topic');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +96,8 @@ export function GenerateGraphDialog({
       onGenerate();
     } else if (mode === 'doc' && selectedFile && onUploadAndGenerate) {
       onUploadAndGenerate(selectedFile, complexity, inputLevel, inputGoal);
+    } else if (mode === 'project' && onGenerateProject) {
+      onGenerateProject();
     }
   };
 
@@ -101,7 +112,9 @@ export function GenerateGraphDialog({
 
   const canSubmit = mode === 'topic'
     ? !isProcessing && !!inputTopic.trim()
-    : !isProcessing && !!selectedFile;
+    : mode === 'doc'
+      ? !isProcessing && !!selectedFile
+      : !isProcessing && !!(inputProjectDesc?.trim());
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -126,6 +139,18 @@ export function GenerateGraphDialog({
           >
             <Sparkles className="h-4 w-4" />
             {t('doc.tab_topic')}
+          </button>
+          <button
+            onClick={() => setMode('project')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+              mode === 'project'
+                ? 'bg-white shadow-sm text-emerald-700'
+                : 'text-zinc-500 hover:text-zinc-700'
+            }`}
+            disabled={isProcessing}
+          >
+            <Rocket className="h-4 w-4" />
+            {t('project.tab_project')}
           </button>
           <button
             onClick={() => setMode('doc')}
@@ -207,7 +232,24 @@ export function GenerateGraphDialog({
             </div>
           )}
 
-          {/* ====== 共享字段：水平 & 用途（两种模式都可填） ====== */}
+          {/* ====== 项目模式：项目描述文本框 ====== */}
+          {mode === 'project' && (
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="projectDesc" className="text-right mt-2">
+                {t('project.desc_label')}
+              </Label>
+              <Textarea
+                id="projectDesc"
+                placeholder={t('project.desc_placeholder')}
+                value={inputProjectDesc}
+                onChange={(e) => setInputProjectDesc?.(e.target.value)}
+                className="col-span-3 min-h-[100px] resize-y"
+                disabled={isProcessing}
+              />
+            </div>
+          )}
+
+          {/* ====== 共享字段：水平（主题+文档+项目都可填） ====== */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="level" className="text-right text-sm">
               {t('app.level_label')}
@@ -221,6 +263,8 @@ export function GenerateGraphDialog({
               disabled={isProcessing}
             />
           </div>
+          {/* 项目模式下隐藏学习用途字段，因为项目描述本身就是用途 */}
+          {mode !== 'project' && (
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="goal" className="text-right text-sm">
               {t('app.goal_label')}
@@ -234,6 +278,7 @@ export function GenerateGraphDialog({
               disabled={isProcessing}
             />
           </div>
+          )}
 
           {/* ====== 知识深度滑块 ====== */}
           <div className="grid grid-cols-4 items-center gap-4">
@@ -258,16 +303,18 @@ export function GenerateGraphDialog({
             className={`w-full text-white ${
               mode === 'topic'
                 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
-                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                : mode === 'project'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
             }`}
           >
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isDocUploading ? t('doc.uploading') : t('app.generating_graph')}
+                {isDocUploading ? t('doc.uploading') : mode === 'project' ? t('project.generating') : t('app.generating_graph')}
               </>
             ) : (
-              mode === 'topic' ? t('app.start_generate') : t('doc.start_analyze')
+              mode === 'topic' ? t('app.start_generate') : mode === 'project' ? t('project.start_generate') : t('doc.start_analyze')
             )}
           </Button>
         </DialogFooter>

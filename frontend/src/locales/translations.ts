@@ -121,7 +121,15 @@ export const zh = {
     tab_doc: "文档模式",
     level_optional_hint: "可选，例如：零基础 / 有一定基础",
     goal_optional_hint: "可选，例如：面试冲刺 / 论文精读",
-  }
+  },
+  project: {
+    tab_project: "项目模式",
+    desc_label: "项目描述",
+    desc_placeholder: "描述你想做的项目，例如：用 React + Node.js 开发一个在线聊天应用...",
+    start_generate: "生成项目路径",
+    generating: "正在分析项目并生成学习路径...",
+    mode_label: "项目模式",
+  },
 
 };
 
@@ -248,5 +256,13 @@ export const en = {
     tab_doc: "Document Mode",
     level_optional_hint: "Optional, e.g., Beginner / Intermediate",
     goal_optional_hint: "Optional, e.g., Interview Prep / Paper Study",
-  }
+  },
+  project: {
+    tab_project: "Project Mode",
+    desc_label: "Project Description",
+    desc_placeholder: "Describe your project, e.g., Build an online chat app with React + Node.js...",
+    start_generate: "Generate Project Path",
+    generating: "Analyzing project and generating learning path...",
+    mode_label: "Project Mode",
+  },
 };

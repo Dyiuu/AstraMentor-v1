@@ -16,6 +16,7 @@ from backend.models import (
     SaveGraphRequest,
     AddNodeRequest,
     GroundingSource,
+    GenerateProjectGraphRequest,
 )
 
 from services.code_runner import CodeRunner
@@ -99,6 +100,19 @@ async def expand_graph(request: AddNodeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to expand graph: {str(e)}")
 
+@router.post("/graph/generate-project")
+async def generate_project_graph(request: GenerateProjectGraphRequest):
+    """根据项目描述生成技能学习路径星图"""
+    service = get_service(request.project_description[:50])
+    graph = service.generate_project_graph(
+        project_description=request.project_description,
+        current_level=request.current_level,
+        complexity=request.complexity,
+    )
+    if not graph:
+        raise HTTPException(status_code=500, detail="Failed to generate project graph")
+    return graph
+
 @router.get("/state")
 async def get_state():
     service = get_service()
@@ -116,6 +130,7 @@ async def start_learning(request: StartLearningRequest):
         target_mastery=request.target_mastery,
         current_mastery=request.current_mastery,
         graph_data=graph_data,
+        project_description=request.project_description,
     )
     return TeachingContentResponse(content=plan)
 
@@ -169,7 +184,8 @@ async def reteach(request: ReteachRequest):
     if not kp:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
 
-    result = service.reteach_step(kp, error_analysis=request.error_analysis)
+    result = service.reteach_step(kp, error_analysis=request.error_analysis,
+                                  project_description=request.project_description)
     sources = [
         GroundingSource(title=s.get("title", ""), url=s.get("url", ""))
         for s in result.get("sources", [])
@@ -206,7 +222,8 @@ async def chat(request: ChatRequest):
         teaching_content="",
         question=request.question,
         image=request.image,
-        history=request.history
+        history=request.history,
+        project_description=request.project_description,
     )
     return {
         "response": result["content"],

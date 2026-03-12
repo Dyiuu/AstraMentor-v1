@@ -284,3 +284,99 @@ def get_teaching_plan_prompt(
         target_score=target_score,
         note=note or "无"
     )
+
+
+# ============================================================================
+# 项目模式 — 星图生成提示词
+# NOTE: 与主题模式不同，项目模式按「完成项目所需的技能」拆解节点
+# ============================================================================
+
+PROJECT_GRAPH_SYSTEM_INSTRUCTION = """你是一位专业的项目导师和知识星图架构师。
+
+你的任务是：根据用户想要完成的项目描述和当前水平，生成一个「项目技能路径图」。
+与普通知识星图不同，你需要：
+
+1. **分析项目需求**：理解项目要用到哪些技术、工具和技能
+2. **评估技能差距**：根据用户当前水平，判断哪些技能已具备、哪些需要学习
+3. **生成技能节点**：每个节点代表完成项目所需的一项具体技能或知识
+4. **按优先级排序**：节点的 weight_B（目标掌握度）应反映该技能对项目完成的重要性
+
+输出要求：
+1. 使用 JSON Schema 定义的 KnowledgeGraph 格式
+2. graph.topic 设置为项目的简短标题
+3. graph.name 设置为 "{{项目名}} 项目技能路径" 的格式
+4. nodes 包含 {node_range} 个技能节点（{complexity_desc}），每个节点需要：
+   - id: 唯一标识符（如 "node_1", "node_2"）
+   - name: 技能名称（简洁明确，如 "React 组件开发"、"REST API 设计"）
+   - attributes.weight_A: 根据用户当前水平估算的掌握度（0.0-1.0）
+   - attributes.weight_B: 该技能对项目完成的重要程度（0.0-1.0）
+     * 核心必备技能设置为 0.8-0.95
+     * 辅助性技能设置为 0.5-0.7
+   - attributes.description: 说明该技能在项目中的具体应用场景
+   - attributes.user_note: 留空
+5. links 定义技能间的学习先后关系：
+   - source: 前置技能节点ID
+   - target: 后续技能节点ID
+   - reason: 说明为什么需要先学 source 才能学 target
+   - weight: 依赖强度（0.0-1.0）
+
+设计原则：
+- 面向实战：每个节点都应和项目的具体需求挂钩
+- 最短路径：只包含项目真正需要的技能，不要泛泛而谈
+- 循序渐进：从基础到高级，确保学习路径可行
+- 严格层级：只连接相邻或相近层级的节点
+- 树状结构：倾向于生成清晰的树状学习路径
+"""
+
+
+def get_project_graph_system_instruction(complexity: int = 2) -> str:
+    """
+    获取项目模式星图生成的系统提示词
+
+    NOTE: 复用 KnowledgeGraphAgent 的复杂度档位配置来动态调整节点数量
+
+    Args:
+        complexity: 复杂度档位（1=简洁 2=标准 3=详细）
+
+    Returns:
+        格式化后的项目模式星图系统提示词
+    """
+    # NOTE: 复用 KnowledgeGraphAgent 中定义的复杂度配置
+    complexity_levels = {
+        1: {"node_range": "4-7", "desc": "只保留核心必备技能，适合快速完成 MVP"},
+        2: {"node_range": "8-12", "desc": "覆盖主要技能分支，适合完整实现项目"},
+        3: {"node_range": "13-20", "desc": "深入展开所有技术细节，适合高质量交付"},
+    }
+    level = complexity_levels.get(complexity, complexity_levels[2])
+    return PROJECT_GRAPH_SYSTEM_INSTRUCTION.format(
+        node_range=level["node_range"],
+        complexity_desc=level["desc"],
+    )
+
+
+def build_project_context_injection(project_description: str) -> str:
+    """
+    构建项目上下文注入文本，用于在教学/讨论/出题流程中告知 AI 项目背景
+
+    NOTE: 当 project_description 非空时，将其追加到系统提示词中，
+    使所有教学内容围绕帮助用户完成项目为目标
+
+    Args:
+        project_description: 用户的项目描述
+
+    Returns:
+        项目上下文注入文本，为空时返回空字符串
+    """
+    if not project_description:
+        return ""
+    return f"""
+【项目背景】
+用户正在学习技能以完成以下项目：
+{project_description}
+
+【重要指导原则】
+1. 所有讲解内容必须联系项目的实际应用场景
+2. 代码示例应尽量贴近项目需求
+3. 讨论问题时要从「帮助用户完成项目」的角度回答
+4. 测验题目应与项目场景相关
+"""
