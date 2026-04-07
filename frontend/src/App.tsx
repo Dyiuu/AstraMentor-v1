@@ -770,6 +770,8 @@ function App() {
         setInteractionState('step_taught');
         setIsPlanView(false);
         setLessonStarted(true);
+        // NOTE: 开始上课后默认隐藏教学计划面板，让用户聚焦课程内容
+        setShowPlanPanel(false);
     } catch (error) {
         toast.error('Failed to start lesson');
         console.error(error);
