@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "course_id": "rag-knowledge-engineering",
+  "course_version": "1.0",
+  "source_hashes": {
+    "materials/01-分析知识库需求.md": "eac7dcd4cc0ba5fa40a82493f13e18d0c05fefd1fd2f1b3213f323cdbbf8c396",
+    "materials/02-建设文档处理流水线.md": "85e44e51ca2ac8d1c4820da94269bd5861b9219498959008b7c89f047b9f899c",
+    "materials/03-设计文档切分策略.md": "08d923dbda3528f7492b43eae400d10942fe524f879d7bbe653e312e6a863bc0",
+    "materials/04-建立检索索引.md": "21a0c6db45bcd4beb7151ac02d8a89f537b74b353e16d6ff4a27c438b08a200d",
+    "materials/05-优化召回结果.md": "ad9ca8eea8ff9c0ccbd6f158d14d741ae284c4d150044702c51a2ac6ae51dba0",
+    "materials/06-生成有依据的答案.md": "b0fe9f7a3fac9d3fc7884b30fdb22156893c8df33b7fb44a8ed9e0b3847f375a",
+    "materials/07-建立RAG评测体系.md": "48e6fc240ee6db85c6c169585785e11c5778172fa60ad4cd8880224ae94b2650",
+    "materials/08-综合项目.md": "86ddf639de8dba114147e4b1c58ef7a03a1b7384179c4e8b6e4475a191926e0e"
+  },
+  "artifact_hashes": {
+    "chunks.jsonl": "49fb8a81d11a5ce72782867b1af380167f7a6e91010d4624fb16ec82da6b137d",
+    "bm25.json": "6d8b9bd2dba6b6c09354824ce900e576a36c47559010dcb8d2cf98c9732390c9"
+  },
+  "chunking": {
+    "target_chars": 700,
+    "max_chars": 900,
+    "overlap_chars": 120
+  },
+  "chunk_count": 152,
+  "section_count": 152,
+  "embedding": null,
+  "built_at": "2026-08-20T15:59:12.506958+00:00"
+}

@@ -1,0 +1,38 @@
+{
+  "id": "ai-app-production",
+  "title": "AI 应用测试、部署与安全",
+  "description": "面向 AI 应用质量评测、可观测、安全防护、性能成本与工程化部署的生产实践课程",
+  "locale": "zh-CN",
+  "version": "1.0",
+  "category": "人工智能应用",
+  "order": 50,
+  "hours": 32,
+  "level": "advanced",
+  "track": "AI 应用工程",
+  "prerequisite_skills": [
+    "能够使用 Python 开发、调试和测试应用",
+    "能够阅读大模型、RAG 与 Agent 应用代码",
+    "理解 HTTP、JSON、异步调用和环境变量",
+    "能够使用 Git、Docker 和基本 Linux 命令"
+  ],
+  "recommended_courses": ["agent-engineering"],
+  "job_roles": ["AI 测试工程师", "AI 应用运维工程师"],
+  "competencies": [
+    "建立 AI 应用质量标准与自动回归测试",
+    "开展效果评测、链路追踪与生产监控",
+    "防御提示注入并落实最小权限治理",
+    "优化性能成本并完成容器化部署"
+  ],
+  "capstone": "将一个 AI 职业学习应用交付为可评测、可观测、可回滚的安全生产服务",
+  "tags": ["AI 测试", "评测", "可观测性", "安全", "性能成本", "Docker"],
+  "materials": [
+    {"id": "quality-standard", "title": "项目一：制定质量标准", "path": "materials/01-制定质量标准.md"},
+    {"id": "functional-testing", "title": "项目二：自动化功能测试", "path": "materials/02-自动化功能测试.md"},
+    {"id": "effect-evaluation", "title": "项目三：开展效果评测", "path": "materials/03-开展效果评测.md"},
+    {"id": "observability", "title": "项目四：建立可观测体系", "path": "materials/04-建立可观测体系.md"},
+    {"id": "ai-security", "title": "项目五：防御 AI 应用风险", "path": "materials/05-防御AI应用风险.md"},
+    {"id": "performance-cost", "title": "项目六：优化性能和成本", "path": "materials/06-优化性能和成本.md"},
+    {"id": "deployment", "title": "项目七：完成工程化部署", "path": "materials/07-完成工程化部署.md"},
+    {"id": "capstone", "title": "项目八：综合项目", "path": "materials/08-综合项目.md"}
+  ]
+}

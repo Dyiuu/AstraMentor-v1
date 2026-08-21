@@ -44,7 +44,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, graphData, viewMode }) => 
             average_mastery: average
         };
     }
-    return null; 
+    return state;
   }, [state, graphData]);
 
   if (!displayState) return null;
@@ -52,7 +52,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state, graphData, viewMode }) => 
   const is3D = viewMode === '3d';
 
   return (
-    <div className="flex flex-col gap-2 mb-4 pointer-events-auto">
+    <div className="dashboard-shell flex flex-col gap-2 mb-4 pointer-events-auto">
       <div className="flex items-center">
         <button 
           onClick={() => setIsOpen(!isOpen)}
@@ -67,33 +67,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state, graphData, viewMode }) => 
       </div>
       
       {isOpen && (
-        <div className="flex gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <Card className={`w-32 backdrop-blur-md shadow-sm transition-colors ${
+        <div className="dashboard-stats animate-in fade-in slide-in-from-top-2 duration-300">
+          <Card className={`dashboard-stat backdrop-blur-md shadow-sm transition-colors ${
             is3D 
               ? 'bg-white/10 border-white/10 hover:bg-white/20' 
               : 'bg-white/80 border-white/20 hover:bg-white/90'
           }`}>
-            <CardContent className="p-4 flex flex-col items-center justify-center">
+            <CardContent className="dashboard-stat__content p-4 flex flex-col items-center justify-center">
               <div className={`text-xs font-medium mb-1 ${is3D ? 'text-slate-300' : 'text-muted-foreground'}`}>{t('dashboard.total')}</div>
               <div className={`text-2xl font-bold ${is3D ? 'text-slate-100' : ''}`}>{displayState.total}</div>
             </CardContent>
           </Card>
-          <Card className={`w-32 backdrop-blur-md shadow-sm transition-colors ${
+          <Card className={`dashboard-stat backdrop-blur-md shadow-sm transition-colors ${
             is3D 
               ? 'bg-white/10 border-white/10 hover:bg-white/20' 
               : 'bg-white/80 border-white/20 hover:bg-white/90'
           }`}>
-            <CardContent className="p-4 flex flex-col items-center justify-center">
+            <CardContent className="dashboard-stat__content p-4 flex flex-col items-center justify-center">
                 <div className={`text-xs font-medium mb-1 ${is3D ? 'text-slate-300' : 'text-muted-foreground'}`}>{t('dashboard.mastered')}</div>
                 <div className={`text-2xl font-bold ${is3D ? 'text-emerald-400' : 'text-green-600'}`}>{displayState.mastered}</div>
             </CardContent>
           </Card>
-          <Card className={`w-32 backdrop-blur-md shadow-sm transition-colors ${
+          <Card className={`dashboard-stat backdrop-blur-md shadow-sm transition-colors ${
             is3D 
               ? 'bg-white/10 border-white/10 hover:bg-white/20' 
               : 'bg-white/80 border-white/20 hover:bg-white/90'
           }`}>
-            <CardContent className="p-4 flex flex-col items-center justify-center">
+            <CardContent className="dashboard-stat__content p-4 flex flex-col items-center justify-center">
                 <div className={`text-xs font-medium mb-1 ${is3D ? 'text-slate-300' : 'text-muted-foreground'}`}>{t('dashboard.average_mastery')}</div>
                 <div className={`text-2xl font-bold ${is3D ? 'text-slate-100' : ''}`}>{(displayState.average_mastery * 100).toFixed(1)}%</div>
             </CardContent>

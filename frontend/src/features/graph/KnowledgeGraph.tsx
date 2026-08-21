@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- G6's dynamic event, renderer, and extension payloads are isolated in this adapter component. */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { CameraSetting, ExtensionCategory, Graph, register } from '@antv/g6';
 import { D3Force3DLayout, Light, Line3D, ObserveCanvas3D, Sphere, ZoomCanvas3D, renderer as renderer3d } from '@antv/g6-extension-3d';
@@ -192,7 +193,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
     y: number;
   } | null>(null);
   // NOTE: 3D 模式下 hover 节点的 tooltip 信息（含父子关系）
-  const [_hoveredNode, setHoveredNode] = useState<{
+  const [, setHoveredNode] = useState<{
     name: string;
     x: number;
     y: number;
@@ -323,7 +324,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
 
       // NOTE: 根据 viewMode 分支创建不同类型的图表
       const graph = viewMode === '3d'
-        ? create3DGraph(rect, g6Data, themeColors)
+        ? create3DGraph(rect, g6Data)
         : create2DGraph(rect, g6Data, themeColors);
 
       graphInstance = graph;
@@ -525,7 +526,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
      * 创建 3D 力导向图表
      * NOTE: Sphere 节点不支持 labelText，通过 hover tooltip 显示名称
      */
-    const create3DGraph = (rect: DOMRect, g6d: any, _tc: any) => {
+    const create3DGraph = (rect: DOMRect, g6d: any) => {
       // NOTE: 统计每个节点的连接数，用于动态调整半径
       const degreeMap: Record<string, number> = {};
       g6d.edges.forEach((e: any) => {
@@ -654,7 +655,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
           }]);
         });
         graph.draw();
-      } catch (err) { /* 忽略更新错误 */ }
+      } catch { /* 忽略更新错误 */ }
     }
   }, [show3DEdges, viewMode]);
 
@@ -1232,6 +1233,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
 
   return (
     <div
+      className="knowledge-graph-shell"
       style={{
         width: '100%',
         height: '100%',
@@ -1281,13 +1283,17 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ data, onNodeClick, onNo
       {/* 工具栏 */}
       {data && (
         <div
+          className="graph-toolbar"
           style={{
             position: 'absolute',
             top: 16,
+            left: 16,
             right: 16,
             zIndex: 10,
             display: 'flex',
             gap: 8,
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
           }}
         >
           {/* 2D 模式专属：布局切换按钮 */}

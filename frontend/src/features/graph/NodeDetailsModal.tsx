@@ -4,15 +4,30 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
-import { api } from '../../api/client';
 import { toast } from 'sonner';
 import { useLanguage } from '../../contexts/LanguageContext';
+import type { GraphNodeAttributes } from '../../types';
+
+interface NodeDetailsNode {
+  id: string;
+  data?: GraphNodeAttributes & {
+    label?: string;
+    name?: string;
+    attributes?: GraphNodeAttributes;
+  };
+}
+
+interface NodeUpdatePayload {
+  weight_A: number;
+  weight_B: number;
+  user_note: string;
+}
 
 interface NodeDetailsModalProps {
-  node: any;
+  node: NodeDetailsNode | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (updatedNode: any) => void; // Callback to refresh graph/data
+  onUpdate: (updatedNode: NodeUpdatePayload) => void | Promise<void>;
   onDelete?: (nodeId: string) => void; // 删除节点回调
 }
 
@@ -32,20 +47,15 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
   }, [node]);
 
   const handleSave = async () => {
+    if (!node) return;
     setIsLoading(true);
     try {
-        await api.updateNode(
-            node.data.label || node.data.name,
-            userNote,
-            parseFloat(weightA.toString()),
-            parseFloat(weightB.toString())
-        );
-        toast.success(t('node_modal.success'));
-        onUpdate({
+        await onUpdate({
            weight_A: parseFloat(weightA.toString()),
            weight_B: parseFloat(weightB.toString()),
            user_note: userNote
         });
+        toast.success(t('node_modal.success'));
         onClose();
     } catch (error) {
         console.error(error);
@@ -60,7 +70,7 @@ export const NodeDetailsModal: React.FC<NodeDetailsModalProps> = ({ node, isOpen
    * NOTE: 使用 window.confirm 保持轻量，避免引入额外弹窗组件
    */
   const handleDelete = () => {
-    if (!onDelete) return;
+    if (!onDelete || !node) return;
     const confirmed = window.confirm(t('node_modal.delete_confirm'));
     if (confirmed) {
       onDelete(node.id);

@@ -15,7 +15,7 @@
   <strong>通过 AI 驱动的交互式知识星图，重新定义你的学习方式。</strong>
 </p>
 
-  AstraMentor 是一个基于多 Agent 架构的全栈 AI 教学系统。它不只是一个聊天机器人，而是一位能够感知你需要学什么、该怎么学、并实时跟踪你学习状态的智能私教。支持三种模式：<strong>主题模式</strong>（输入任意主题自由学习）、<strong>文档模式</strong>（上传 PDF 文件精读论文/教材）、以及<strong>项目模式</strong>（输入项目需求，AI 为你生成完成该项目所需的技能路径）。
+  AstraMentor 是一个基于多 Agent 架构的全栈 AI 教学系统。它不只是一个聊天机器人，而是一位能够感知你需要学什么、该怎么学、并实时跟踪你学习状态的智能私教。支持<strong>课程知识库模式</strong>（职业教育教材优先、回答可追溯）、<strong>主题模式</strong>（输入任意主题自由学习）、<strong>文档模式</strong>（上传 PDF 文件精读论文/教材）和<strong>项目模式</strong>（输入项目需求，AI 为你生成完成该项目所需的技能路径）。
 
 <br/>
 
@@ -57,6 +57,14 @@
 - **双层评分算法**: 每步测验分独立记录（`step_scores`），全局掌握度 = 加权平均 × 完成度系数 × 目标掌握度，杜绝"还没学完就高分"
 - **5 档反馈体系**: 🌱 还需努力 → 💡 有所领悟 → 📖 基本掌握 → 💪 表现不错 → 🌟 非常出色
 - **持久化**: 你的每一次对话、每一个知识点的状态、教学计划和步骤分数都会被保存
+- **主页历史学习**: 最近星图显示在主页右侧，可恢复到上次节点、步骤、聊天与未完成测验
+
+### ⚡ 流式回答与生成控制
+
+- **边生成边阅读**: 自由问答、开始讲课、下一步和重新讲解均通过 SSE 流式显示
+- **回答长度**: 自由问答可选 1024 / 2048 / 4096 / 8192 或 256~32768 自定义 Max Tokens
+- **Thinking 模式**: 支持的模型会把思考内容放在可折叠区域；不支持时自动降级并显示提醒
+- **测验强绑定**: 题目绑定教学计划版本、当前步骤和最近完整讲解，旧题或串步骤题会被拒绝
 
 ### 🛡️ 沉浸体验与护眼 (Focus & Eye Care)
 
@@ -98,6 +106,15 @@
 - **项目上下文**: 教学、讨论、测验环节全程注入项目背景，所有回答围绕「如何用它来完成你的项目」深入浅出
 - **无缝集成**: 与主题/文档模式统一入口，一键切换
 
+### 📚 职业教育课程知识库 (Course RAG) [NEW]
+
+- **教材优先**: 教学计划、讲解、讨论、出题、评分和重讲都会检索当前课程教材
+- **可追溯引用**: 回答展示文档标题、章节路径、原文摘录和行号，便于学生回看教材
+- **离线可用**: 默认使用本地 BM25 中文检索；未配置向量模型或向量服务失败时仍可学习
+- **混合检索**: 配置 Embedding 后自动启用 BM25 + 向量召回，并通过排序融合返回证据
+- **知识边界**: 非教材信息明确标记为“扩展知识”，避免学生混淆教材内容与模型补充
+- **易于扩科**: 每门课程一个独立目录与配置文件，索引、检索和学习状态按 `course_id` 隔离
+
 
 ### ⚙️ 评分算法详解
 
@@ -129,6 +146,9 @@ graph TD
 
     subgraph "Backend Services"
         API --> Service[Learning Service]
+        API --> CourseAPI[Course API]
+        CourseAPI --> RAG[Course RAG Index / Retriever]
+        RAG --> Service
         API --> DocAPI[Doc API Router]
         Service --> KA[Knowledge Agent]
         Service --> TA[Teacher Agent]
@@ -207,6 +227,79 @@ copy .env.example .env
 uvicorn backend.app:app --reload
 ```
 
+### 2️⃣ 构建课程知识库
+
+项目内置一条面向 AI 职业教育的递进课程线：
+
+| 顺序 | 课程 ID | 课程 | 建议定位 |
+|---:|---|---|---|
+| 10 | `agent-design` | 智能体设计与应用开发基础 | Coze 等低代码智能体入门 |
+| 20 | `llm-app-development` | 大模型应用开发 | 模型 API、结构化、多模态、工具与流式交互 |
+| 30 | `rag-knowledge-engineering` | RAG 知识库工程 | 文档治理、检索、引用与评测 |
+| 40 | `agent-engineering` | Agent 开发工程师 | 执行循环、工具、记忆、工作流、MCP 与多智能体 |
+| 50 | `ai-app-production` | AI 应用测试、部署与安全 | 测试、评测、可观测、安全、成本与部署 |
+
+课程索引不会在学习请求中偷偷构建。首次进入或教材变更后，课程卡片会显示 `missing` / `stale` 状态；点击“构建知识库”后，前端轮询 `building`，直到进入 `ready` 或 `failed`。也可以在启动前通过命令行构建：
+
+```bash
+python -m rag.index --course agent-design --force
+```
+
+批量构建全部已注册课程：
+
+```bash
+python -m rag.index --all --force
+```
+
+新增或修改教材后，建议先运行内容门禁，再重建索引：
+
+```bash
+python -m rag.content_validator --all
+python -m unittest discover -s tests -p "test_course_*.py" -v
+```
+
+新增课程时，在 `rag/courses/<course-id>/` 下创建：
+
+```text
+rag/courses/<course-id>/
+├── course.yaml
+└── materials/
+    ├── 教材上册.md
+    └── 教材下册.md
+```
+
+`course.yaml` 示例：
+
+```yaml
+id: network-technology
+title: 计算机网络技术
+description: 面向职业教育的计算机网络基础课程
+locale: zh-CN
+version: "1.0"
+category: 信息技术
+order: 60
+hours: 32
+level: intermediate
+track: AI 应用工程
+prerequisite_skills:
+  - 能够使用 Python 处理文件和 JSON
+recommended_courses:
+  - llm-app-development
+job_roles:
+  - 知识库工程师
+competencies:
+  - 建设可追溯的课程知识库
+capstone: 交付一个带引用、可拒答的课程助手
+tags:
+  - RAG
+materials:
+  - id: textbook
+    title: 计算机网络技术教材
+    path: materials/计算机网络技术.md
+```
+
+然后执行内容校验与 `python -m rag.index --course network-technology --force`。前端课程目录会通过 `/api/courses` 自动发现新课程，无需修改页面代码。`course.yaml` 仍兼容旧版最小字段；缺少职业元数据时接口会在 `course_warnings` 中提示，便于逐步补齐。
+
 #### 环境变量配置示例
 
 ```env
@@ -227,11 +320,22 @@ ASTRA_PROVIDER=qwen
 ASTRA_API_KEY=your-qwen-key
 ASTRA_API_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
 ASTRA_MODEL_NAME=qwen3.5-plus
+
+# ========== 使用 OpenRouter（OpenAI 兼容）==========
+ASTRA_PROVIDER=openrouter
+ASTRA_API_KEY=your-openrouter-key
+# 这里必须是 API 根地址，不要手动追加 /chat/completions
+ASTRA_API_ENDPOINT=https://openrouter.ai/api/v1
+ASTRA_MODEL_NAME=google/gemini-2.5-flash
 ```
+
+如果误把 OpenRouter Endpoint 写成 `.../api/v1/chat/completions`，新版客户端也会自动裁剪为根地址，避免 SDK 拼成两次 `/chat/completions`。API Key 不要截图、提交到 Git 或发给他人；一旦泄露请立即在提供商后台撤销并重建。
 
 后端服务将在 `http://127.0.0.1:8000` 启动。
 
-### 2️⃣ 前端环境设置
+> MVP 当前把课程索引构建中的运行状态保存在进程内。请保持 Uvicorn 单 worker（上面的默认命令即为单 worker）；如需多 worker/多实例部署，应先把构建队列与状态迁移到 Redis、数据库或独立任务服务。
+
+### 3️⃣ 前端环境设置
 
 ```bash
 # 1. 打开新的终端窗口，进入 frontend 目录
@@ -261,6 +365,7 @@ npm run dev
     - 答错可点击 **"🔄 针对错误重新讲解"** 精准补强
 6.  **实践编程**: 点击顶部 **"IDE"** 按钮打开代码编辑器，选择语言并运行代码，进行实战练习
 7.  **查看成长**: 观察左侧仪表板和星图节点颜色变化，掌握度随步骤推进逐渐上涨
+8.  **继续学习**: 返回主页后，从右侧“历史学习”选择记录，可恢复到最后学习的节点和步骤
 
 ### 📄 文档模式使用步骤
 
@@ -289,7 +394,10 @@ AstraMentor-v1/
 ├── 📂 backend/                 # FastAPI 后端核心代码
 │   ├── api.py                 # 主题模式 API 路由
 │   ├── doc_api.py             # 文档模式 API 路由 [NEW]
-│   ├── app.py                 # 应用入口（注册双路由）
+│   ├── course_api.py          # 课程目录、索引状态与检索 API
+│   ├── course_runtime.py      # 课程索引构建状态机与并发去重
+│   ├── session_api.py         # 历史学习快照 API
+│   ├── app.py                 # 应用入口与统一 409 恢复契约
 │   └── models.py              # Pydantic 数据模型
 ├── 📂 core/                    # 核心逻辑
 │   ├── prompts.py             # 主题模式 5 档教学/评分提示词
@@ -301,6 +409,8 @@ AstraMentor-v1/
 ├── 📂 services/                # 业务逻辑层
 │   ├── learning_service.py    # 教学计划管理、双层评分聚合
 │   ├── pdf_parser.py          # PDF 解析服务 [NEW]
+│   ├── session_repository.py  # 原子写入的学习会话仓库
+│   ├── streaming_service.py   # SSE 事件编码
 │   └── code_runner.py         # 代码沙箱执行
 ├── 📂 utils/                   # 工具模块
 │   ├── api_client.py          # 多模型 Provider 统一客户端（Gemini / GLM / Qwen）
@@ -314,9 +424,17 @@ AstraMentor-v1/
 │   │   ├── features/dashboard/# 学习仪表板
 │   │   ├── features/ide/      # 在线代码编辑器
 │   │   ├── features/home/     # 首页落地页
+│   │   ├── features/courses/  # 职业课程目录、详情与索引恢复
 │   │   ├── features/sidebar/  # 历史星图侧边栏
 │   │   ├── locales/           # 中英文国际化
 │   │   └── api/               # Axios API 客户端
+├── 📂 rag/                     # 文件型多课程 RAG
+│   ├── courses/               # 每门课程的 manifest 与 Markdown 教材
+│   ├── indexes/               # 按 course_id 隔离的 BM25/向量索引
+│   ├── course_registry.py     # 课程发现、职业元数据与安全校验
+│   ├── indexer.py             # 标题感知切分与原子索引发布
+│   ├── retriever.py           # BM25/混合检索与索引就绪保护
+│   └── content_validator.py   # 4 学时项目教材质量门禁
 ├── 📂 test_data/               # 运行时数据（学习状态、图谱 JSON、上传 PDF）
 ├── config.py                   # 应用配置
 ├── .env.example                # 环境变量模板

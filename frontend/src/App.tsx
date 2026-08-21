@@ -1,29 +1,34 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import { api } from './api/client';
-import type { GraphData, LearnerState, ChatMessage } from './types';
-import KnowledgeGraph from './features/graph/KnowledgeGraph';
+import { streamLearning } from './api/stream';
+import { getCourseIndexNotReadyDetail, readableApiError } from './api/errors';
+import { buildCourseCurrentLevel } from './features/courses/courseUtils';
+import { resolveQuizContextRecovery } from './features/chat/quizRecovery';
+import type { GraphData, GraphNode, GraphNodeAttributes, LearnerState, ChatMessage, Course, ChatOptions, SessionSnapshot, CourseCitation, GroundingSource, KnowledgeScope, CourseIndexRecovery } from './types';
 import { NodeDetailsModal } from './features/graph/NodeDetailsModal';
 import { AddNodeDialog } from './features/graph/AddNodeDialog';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import ChatInterface from './features/chat/ChatInterface';
 import Dashboard from './features/dashboard/Dashboard';
 import HomePage from './features/home/HomePage';
 import { Button } from './components/ui/button';
 import { Search, Loader2, Book, Menu, Sun, BookOpen, Code, Sparkles, Plus } from 'lucide-react';
-import { IDEPanel } from './features/ide/IDEPanel';
 import { GenerateGraphDialog } from './features/graph/GenerateGraphDialog';
 import { ScrollArea } from './components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable"
 import { HistorySidebar, type GraphSession } from './features/sidebar/HistorySidebar';
 import { useLanguage } from './contexts/LanguageContext';
+
+// The graph renderer and Monaco editor are the two heaviest optional surfaces.
+// Loading them only after entering a learning session keeps the course catalog fast.
+const KnowledgeGraph = lazy(() => import('./features/graph/KnowledgeGraph'));
+const IDEPanel = lazy(() =>
+  import('./features/ide/IDEPanel').then((module) => ({ default: module.IDEPanel })),
+);
+const ChatInterface = lazy(() => import('./features/chat/ChatInterface'));
+const MarkdownContent = lazy(() =>
+  import('./components/MarkdownContent').then((module) => ({ default: module.MarkdownContent })),
+);
 
 // Define session state type
 interface NodeSessionState {
@@ -32,6 +37,26 @@ interface NodeSessionState {
   isPlanView: boolean;
   showPlanPanel: boolean; 
   lessonStarted: boolean;
+  interactionState?: 'chat' | 'confirm_understanding' | 'quiz' | 'step_taught' | 'step_evaluated';
+  currentQuestion?: string;
+  currentQuestionId?: string;
+  stepProgress?: { current: number; total: number } | null;
+  lastEvalAnalysis?: string;
+}
+
+interface ContextMenuNode {
+  id: string;
+  data?: GraphNodeAttributes & {
+    label?: string;
+    name?: string;
+    attributes?: GraphNodeAttributes;
+  };
+}
+
+interface NodeUpdatePayload {
+  weight_A: number;
+  weight_B: number;
+  user_note: string;
 }
 
 interface FullGraphSession extends GraphSession {
@@ -45,6 +70,13 @@ interface FullGraphSession extends GraphSession {
     // NOTE: 项目模式下保存项目描述
     projectMode?: boolean;
     projectDescription?: string;
+    courseId?: string;
+    courseTitle?: string;
+    docId?: string;
+    docFilename?: string;
+    selectedNode?: { id: string; name: string; attributes?: GraphNodeAttributes } | null;
+    savedStepProgress?: { current: number; total: number } | null;
+    mode?: string;
 }
 
 function App() {
@@ -64,7 +96,7 @@ function App() {
   const [graphViewMode, setGraphViewMode] = useState<'2d' | '3d'>('2d');
 
   // Current Active Node
-  const [selectedNode, setSelectedNode] = useState<{ id: string; name: string; attributes?: any } | null>(null);
+  const [selectedNode, setSelectedNode] = useState<{ id: string; name: string; attributes?: GraphNodeAttributes } | null>(null);
   
   // Session State Storage (Map of Node ID -> Session State)
   const [nodeSessions, setNodeSessions] = useState<Record<string, NodeSessionState>>({});
@@ -72,7 +104,7 @@ function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
-  const [contextMenuNode, setContextMenuNode] = useState<any | null>(null);
+  const [contextMenuNode, setContextMenuNode] = useState<ContextMenuNode | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   // whether the lesson has actually started for the current node; used to stop regenerating plans
   const [lessonStarted, setLessonStarted] = useState(false);
@@ -91,6 +123,11 @@ function App() {
   const [projectDescription, setProjectDescription] = useState('');
   const [inputProjectDesc, setInputProjectDesc] = useState('');
 
+  // ======== 课程知识库模式状态 ========
+  const [activeCourseId, setActiveCourseId] = useState('');
+  const [activeCourseTitle, setActiveCourseTitle] = useState('');
+  const [courseRecovery, setCourseRecovery] = useState<CourseIndexRecovery | null>(null);
+
  
   // UI States for Learning Flow
   const [isPlanView, setIsPlanView] = useState(false); // True when showing plan confirmation button
@@ -104,9 +141,17 @@ function App() {
   const [previousGraphState, setPreviousGraphState] = useState(true);
   
   // Theme State
-  const [theme, setTheme] = useState<'light' | 'eye-care'>('light');
+  const [theme, setTheme] = useState<'dark' | 'eye-care'>('dark');
   const [interactionState, setInteractionState] = useState<'chat' | 'confirm_understanding' | 'quiz' | 'step_taught' | 'step_evaluated'>('chat');
   const [currentQuestion, setCurrentQuestion] = useState<string>("");
+  const [currentQuestionId, setCurrentQuestionId] = useState<string>("");
+  const [chatOptions, setChatOptions] = useState<ChatOptions>(() => {
+      try {
+          const stored = window.localStorage.getItem('astramentor.chat-options');
+          if (stored) return { maxTokens: 4096, thinking: false, ...JSON.parse(stored) };
+      } catch { /* use safe defaults */ }
+      return { maxTokens: 4096, thinking: false };
+  });
   // NOTE: step progress tracking and last evaluation analysis
   const [stepProgress, setStepProgress] = useState<{ current: number; total: number } | null>(null);
   const [lastEvalAnalysis, setLastEvalAnalysis] = useState<string>('');
@@ -115,11 +160,16 @@ function App() {
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('eye-care', 'dark');
-    // NOTE: 强制主页始终使用纯净的白天模式，不随子页的主题状态变化
     if (!showLanding && theme === 'eye-care') {
       root.classList.add('eye-care');
+    } else {
+      root.classList.add('dark');
     }
   }, [theme, showLanding]);
+
+  useEffect(() => {
+      window.localStorage.setItem('astramentor.chat-options', JSON.stringify(chatOptions));
+  }, [chatOptions]);
 
   // History Sessions
   const [graphSessions, setGraphSessions] = useState<FullGraphSession[]>([]);
@@ -128,6 +178,22 @@ function App() {
   // Load initial state
   useEffect(() => {
     loadState();
+    void api.listSessions().then((sessions) => {
+      setGraphSessions(sessions.map((session) => ({
+        id: session.session_id,
+        topic: session.title,
+        date: session.updated_at || session.created_at || new Date().toISOString(),
+        averageMastery: session.average_mastery,
+        graphData: { nodes: [], links: [] },
+        nodeSessions: {},
+        learningGoal: '',
+        currentLevel: '',
+        learnerState: null,
+        internalTopic: '',
+        courseId: session.course_id,
+        courseTitle: session.course_title,
+      })));
+    }).catch((error) => console.error('Failed to load session history:', error));
   }, []);
 
   const loadState = async () => {
@@ -139,7 +205,76 @@ function App() {
     }
   };
 
-  const handleNodeContextMenu = (_event: React.MouseEvent, node: any) => {
+  const streamAssistant = async (
+      endpoint: string,
+      body: Record<string, unknown>,
+      options: { prefix?: string; replaceMessages?: boolean } = {},
+  ) => {
+      const messageId = `stream-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      let content = options.prefix || '';
+      let reasoning = '';
+      let citations: CourseCitation[] = [];
+      let sources: GroundingSource[] = [];
+      let knowledgeScope: KnowledgeScope = 'extension';
+      let currentStep: number | undefined;
+      let totalSteps: number | undefined;
+      let isPlanCompleted = false;
+      let hasIncrementalOutput = false;
+      const placeholder: ChatMessage = {
+          id: messageId,
+          role: 'assistant',
+          content,
+          reasoning,
+          isStreaming: true,
+      };
+      setChatMessages((previous) => options.replaceMessages ? [placeholder] : [...previous, placeholder]);
+
+      const update = () => setChatMessages((previous) => previous.map((item) =>
+          item.id === messageId
+              ? { ...item, content, reasoning, citations, sources, knowledgeScope, isStreaming: true }
+              : item
+      ));
+
+      try {
+          await streamLearning(endpoint, body, ({ event, data }) => {
+               if (event === 'content_delta') {
+                   const delta = String(data.text || '');
+                   content += delta;
+                   hasIncrementalOutput ||= Boolean(delta);
+               }
+               if (event === 'reasoning_delta') {
+                   const delta = String(data.text || '');
+                   reasoning += delta;
+                   hasIncrementalOutput ||= Boolean(delta);
+               }
+              if (event === 'warning') toast.warning(String(data.message || '当前模型已降级为普通回答'));
+              if (event === 'citations') citations = (data.items || []) as CourseCitation[];
+              if (event === 'sources') sources = (data.items || []) as GroundingSource[];
+              if (event === 'meta') {
+                  knowledgeScope = (data.knowledge_scope || 'extension') as KnowledgeScope;
+                  currentStep = typeof data.current_step === 'number' ? data.current_step : undefined;
+                  totalSteps = typeof data.total_steps === 'number' ? data.total_steps : undefined;
+                  isPlanCompleted = Boolean(data.is_plan_completed);
+              }
+              if (event !== 'done') update();
+          });
+       } catch (error) {
+           const courseIndexError = getCourseIndexNotReadyDetail(error);
+           setChatMessages((previous) => courseIndexError && !hasIncrementalOutput
+               ? previous.filter((item) => item.id !== messageId)
+               : previous.map((item) => item.id === messageId ? { ...item, isStreaming: false } : item)
+           );
+           throw error;
+       }
+      setChatMessages((previous) => previous.map((item) =>
+          item.id === messageId
+              ? { ...item, content, reasoning, citations, sources, knowledgeScope, isStreaming: false }
+              : item
+      ));
+      return { content, reasoning, citations, sources, knowledgeScope, currentStep, totalSteps, isPlanCompleted };
+  };
+
+  const handleNodeContextMenu = (_event: React.MouseEvent, node: ContextMenuNode) => {
     setContextMenuNode(node);
   };
 
@@ -188,7 +323,7 @@ function App() {
     // 持久化到磁盘 JSON 文件
     if (currentTopic) {
       try {
-        await api.saveGraph(currentTopic, updatedGraphData);
+        await api.saveGraph(currentTopic, updatedGraphData, activeCourseId || undefined);
       } catch (error) {
         console.error('Failed to save graph to disk:', error);
       }
@@ -197,7 +332,7 @@ function App() {
     toast.success(t('node_modal.delete_success'));
   };
 
-  const calculateAverageMastery = (nodes: any[]): number => {
+  const calculateAverageMastery = (nodes: GraphNode[]): number => {
       if (!nodes || nodes.length === 0) return 0;
       const totalMastery = nodes.reduce((sum, node) => sum + (node.attributes?.weight_A || 0), 0);
       return totalMastery / nodes.length;
@@ -207,7 +342,7 @@ function App() {
    * 更新星图节点数据
    * NOTE: 同步更新前端状态，并调用后端 API 将变更持久化到磁盘 JSON 文件
    */
-  const handleUpdateNode = async (updatedData: any) => {
+  const handleUpdateNode = async (updatedData: NodeUpdatePayload) => {
     if (!graphData || !contextMenuNode) return;
     
     // 更新本地 graphData 状态
@@ -215,9 +350,6 @@ function App() {
        if (n.id === contextMenuNode.id) {
            return {
                ...n,
-               weight_A: updatedData.weight_A,
-               weight_B: updatedData.weight_B,
-               user_note: updatedData.user_note,
                attributes: {
                  ...n.attributes,
                  weight_A: updatedData.weight_A,
@@ -240,7 +372,7 @@ function App() {
     // 如果当前有主题，持久化保存至后端 JSON
     if (currentTopic) {
         try {
-            await api.saveGraph(currentTopic, updatedGraphData);
+            await api.saveGraph(currentTopic, updatedGraphData, activeCourseId || undefined);
             // 同步历史会话列表中的数据
             setGraphSessions(prev =>
               prev.map(session => {
@@ -261,23 +393,29 @@ function App() {
 
       // NOTE: 将当前正在查看的节点的对话状态合并到 nodeSessions 快照中，
       // 避免切换星图后当前节点的聊天记录丢失
-      let mergedNodeSessions = { ...nodeSessions };
+      const mergedNodeSessions = { ...nodeSessions };
       if (selectedNode) {
           mergedNodeSessions[selectedNode.id] = {
               chatMessages,
               teachingPlan,
               isPlanView,
               showPlanPanel,
-              lessonStarted
+              lessonStarted,
+              interactionState,
+              currentQuestion,
+              currentQuestionId,
+              stepProgress,
+              lastEvalAnalysis,
           };
       }
       
       // NOTE: 文档模式下 currentTopic 是内部 ID（doc_xxx），侧边栏应显示文件名
       const existingSession = graphSessions.find(s => s.id === currentSessionId);
       const displayTopic = existingSession?.topic
+        || (activeCourseId && activeCourseTitle ? `📚 ${activeCourseTitle}` : '')
         || (docMode && docFilename ? `📄 ${docFilename}` : '')
         || (projectMode && projectDescription
-           ? `🚀 ${(graphData as any)?.graph?.topic || projectDescription.slice(0, 20)}`
+           ? `🚀 ${graphData.graph?.topic || projectDescription.slice(0, 20)}`
            : '')
         || currentTopic
         || "未命名星图";
@@ -295,6 +433,10 @@ function App() {
           averageMastery: calculateAverageMastery(graphData.nodes),
           projectMode,
           projectDescription,
+          courseId: activeCourseId || undefined,
+          courseTitle: activeCourseTitle || undefined,
+          docId: docId || undefined,
+          docFilename: docFilename || undefined,
       };
 
       setGraphSessions(prev => {
@@ -307,7 +449,70 @@ function App() {
           }
           return [session, ...prev];
       });
+
+      const snapshot: SessionSnapshot = {
+          schema_version: 1,
+          session_id: currentSessionId,
+          mode: docMode ? 'document' : projectMode ? 'project' : activeCourseId ? 'course' : 'topic',
+          title: displayTopic,
+          internal_topic: currentTopic,
+          course_id: activeCourseId || undefined,
+          course_title: activeCourseTitle || undefined,
+          graph_data: graphData,
+          node_sessions: mergedNodeSessions as unknown as Record<string, unknown>,
+          selected_node: selectedNode,
+          step_progress: stepProgress,
+          learning_goal: currentGoal,
+          current_level: currentGraphLevel,
+          learner_state: learnerState,
+          average_mastery: calculateAverageMastery(graphData.nodes),
+          doc_id: docId || undefined,
+          doc_filename: docFilename || undefined,
+          project_description: projectDescription || undefined,
+      };
+      void api.saveSession(snapshot).catch((error) => {
+          console.error('Failed to persist learning session:', error);
+      });
   };
+
+  /** Recover quiz context in-place, and route only course-index 409s back to the catalog. */
+  const handleRequestError = (error: unknown, fallbackMessage: string): boolean => {
+      const quizRecovery = resolveQuizContextRecovery(error);
+      if (quizRecovery) {
+          setCurrentQuestion(quizRecovery.currentQuestion);
+          setCurrentQuestionId(quizRecovery.currentQuestionId);
+          setInteractionState(quizRecovery.interactionState);
+          toast.warning(quizRecovery.message);
+          return true;
+      }
+      const detail = getCourseIndexNotReadyDetail(error);
+      if (!detail) {
+          toast.error(readableApiError(error, fallbackMessage));
+          return false;
+      }
+      if (graphData) saveCurrentSession();
+      setCourseRecovery({
+          courseId: detail.course_id,
+          status: detail.status,
+          message: detail.message,
+      });
+      setShowLanding(true);
+      toast.warning(detail.message);
+      return true;
+  };
+
+  // Persist the active lesson after meaningful UI changes. The debounce keeps
+  // streaming deltas from causing one disk write per token.
+  useEffect(() => {
+      if (showLanding || !graphData) return;
+      if (chatMessages.some((message) => message.isStreaming)) return;
+      const timer = window.setTimeout(() => saveCurrentSession(), 900);
+      return () => window.clearTimeout(timer);
+      // saveCurrentSession intentionally captures the latest render snapshot.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showLanding, graphData, nodeSessions, selectedNode, chatMessages, teachingPlan,
+      isPlanView, lessonStarted, interactionState, stepProgress, currentQuestion,
+      currentQuestionId, lastEvalAnalysis, currentSessionId]);
 
   const handleGenerateGraph = async () => {
     if (!inputTopic.trim()) return;
@@ -340,6 +545,8 @@ function App() {
       setDocFilename('');
       setProjectMode(false);
       setProjectDescription('');
+      setActiveCourseId('');
+      setActiveCourseTitle('');
       
       // Update active session metadata
       setCurrentTopic(inputTopic);
@@ -377,11 +584,71 @@ function App() {
     }
   };
 
+  const handleStartCourse = async (course: Course) => {
+    if (graphData) saveCurrentSession();
+
+    setIsGenerating(true);
+    const newSessionId = Date.now().toString();
+    const courseCurrentLevel = buildCourseCurrentLevel(course);
+    try {
+      toast.info(`正在载入《${course.title}》课程星图…`);
+      const data = await api.generateGraph(
+        course.title,
+        `严格依据《${course.title}》课程教材建立系统学习路径`,
+        courseCurrentLevel,
+        '完成课程核心知识与实训',
+        2,
+        course.id,
+      );
+
+      setGraphData(data);
+      setNodeSessions({});
+      setSelectedNode(null);
+      setChatMessages([]);
+      setTeachingPlan(null);
+      setCurrentSessionId(newSessionId);
+      setCurrentTopic(course.title);
+      setCurrentGoal('完成课程核心知识与实训');
+      setCurrentGraphLevel(courseCurrentLevel);
+      setActiveCourseId(course.id);
+      setActiveCourseTitle(course.title);
+      setDocMode(false);
+      setDocId('');
+      setDocFilename('');
+      setProjectMode(false);
+      setProjectDescription('');
+
+      const newSession: FullGraphSession = {
+        id: newSessionId,
+        topic: `📚 ${course.title}`,
+        internalTopic: course.title,
+        date: new Date().toISOString(),
+        graphData: data,
+        nodeSessions: {},
+        learningGoal: '完成课程核心知识与实训',
+        currentLevel: courseCurrentLevel,
+        learnerState,
+        averageMastery: calculateAverageMastery(data.nodes),
+        courseId: course.id,
+        courseTitle: course.title,
+      };
+      setGraphSessions((previous) => [newSession, ...previous]);
+      setCourseRecovery(null);
+      setShowLanding(false);
+      toast.success('课程星图已准备好');
+    } catch (error) {
+      console.error(error);
+      handleRequestError(error, '课程星图生成失败，请检查模型配置');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   /**
    * 文档模式：上传 PDF 并生成星图
    * NOTE: 先上传解析，再调用文档星图 Agent 生成
    */
-  const handleUploadAndGenerate = async (file: File, complexity: number, _level: string = '', _goal: string = '') => {
+  const handleUploadAndGenerate = async (file: File, complexity: number) => {
     if (graphData) saveCurrentSession();
 
     setIsDocUploading(true);
@@ -404,6 +671,10 @@ function App() {
       setDocMode(true);
       setDocId(uploadResult.doc_id);
       setDocFilename(uploadResult.filename);
+      setActiveCourseId('');
+      setActiveCourseTitle('');
+      setProjectMode(false);
+      setProjectDescription('');
 
       // 重置状态
       setGraphData(data);
@@ -466,6 +737,8 @@ function App() {
       // 切换到项目模式
       setProjectMode(true);
       setProjectDescription(inputProjectDesc);
+      setActiveCourseId('');
+      setActiveCourseTitle('');
       setDocMode(false);
       setDocId('');
       setDocFilename('');
@@ -484,7 +757,7 @@ function App() {
       setCurrentGraphLevel(inputLevel);
 
       // NOTE: 使用 AI 生成的 graph.topic 作为项目简短标题，而非截断用户输入
-      const projectTitle = (data as any).graph?.topic || inputProjectDesc.slice(0, 20);
+      const projectTitle = data.graph?.topic || inputProjectDesc.slice(0, 20);
 
       const newSession: FullGraphSession = {
         id: newSessionId,
@@ -529,7 +802,8 @@ function App() {
         currentMastery,
         targetMastery,
         note,
-        graphData
+        graphData,
+        activeCourseId || undefined,
       );
 
       // 更新前端图谱状态
@@ -554,34 +828,81 @@ function App() {
       toast.success(t('add_node.success'));
     } catch (error) {
       console.error('Failed to expand graph:', error);
-      toast.error(t('add_node.fail'));
+      handleRequestError(error, t('add_node.fail'));
     } finally {
       setIsAddingNode(false);
     }
   };
 
-  const handleLoadSession = (sessionId: string) => {
-      if (sessionId === currentSessionId) return;
+  const handleLoadSession = async (sessionId: string) => {
+      if (sessionId === currentSessionId && graphData) {
+          setShowLanding(false);
+          return;
+      }
 
       // Save current before switching?
       if (graphData) {
           saveCurrentSession();
       }
 
-      const session = graphSessions.find(s => s.id === sessionId);
+      let session = graphSessions.find(s => s.id === sessionId);
       if (!session) return;
 
+      try {
+          const snapshot = await api.getSession(sessionId);
+          session = {
+              id: snapshot.session_id,
+              topic: snapshot.title,
+              date: snapshot.updated_at || snapshot.created_at || new Date().toISOString(),
+              graphData: snapshot.graph_data,
+              nodeSessions: snapshot.node_sessions as unknown as Record<string, NodeSessionState>,
+              learningGoal: snapshot.learning_goal,
+              currentLevel: snapshot.current_level,
+              learnerState: snapshot.learner_state || null,
+              internalTopic: snapshot.internal_topic,
+              projectMode: snapshot.mode === 'project',
+              projectDescription: snapshot.project_description,
+              courseId: snapshot.course_id,
+              courseTitle: snapshot.course_title,
+              docId: snapshot.doc_id,
+              docFilename: snapshot.doc_filename,
+              selectedNode: snapshot.selected_node,
+              savedStepProgress: snapshot.step_progress,
+              averageMastery: snapshot.average_mastery,
+              mode: snapshot.mode,
+          };
+          setGraphSessions((previous) => previous.map((item) => item.id === sessionId ? session! : item));
+      } catch (error) {
+          if (!session.graphData.nodes.length) {
+              toast.error('历史学习记录读取失败');
+              console.error(error);
+              return;
+          }
+      }
+
       // NOTE: 判断是否为文档模式会话，正确恢复各模式状态
-      const isDocSession = session.topic.startsWith('📄 ');
-      if (isDocSession) {
+      const isDocSession = session.mode === 'document' || session.topic.startsWith('📄 ');
+      if (session.courseId) {
+          setActiveCourseId(session.courseId);
+          setActiveCourseTitle(session.courseTitle || session.topic.replace('📚 ', ''));
+          setDocMode(false);
+          setDocId('');
+          setDocFilename('');
+          setProjectMode(false);
+          setProjectDescription('');
+      } else if (isDocSession) {
+          setActiveCourseId('');
+          setActiveCourseTitle('');
           setDocMode(true);
           const storedTopic = session.internalTopic || '';
           const docIdMatch = storedTopic.match(/doc_([a-f0-9]+)/);
-          setDocId(docIdMatch ? docIdMatch[1] : '');
-          setDocFilename(session.topic.replace('📄 ', ''));
+          setDocId(session.docId || (docIdMatch ? docIdMatch[1] : ''));
+          setDocFilename(session.docFilename || session.topic.replace('📄 ', ''));
           setProjectMode(false);
           setProjectDescription('');
       } else if (session.projectMode) {
+          setActiveCourseId('');
+          setActiveCourseTitle('');
           // NOTE: 恢复项目模式状态
           setProjectMode(true);
           setProjectDescription(session.projectDescription || '');
@@ -589,6 +910,8 @@ function App() {
           setDocId('');
           setDocFilename('');
       } else {
+          setActiveCourseId('');
+          setActiveCourseTitle('');
           setDocMode(false);
           setDocId('');
           setDocFilename('');
@@ -605,27 +928,32 @@ function App() {
       setNodeSessions(session.nodeSessions);
       setLearnerState(session.learnerState);
       
-      // Reset View State
-      setSelectedNode(null);
-      setChatMessages([]);
-      setTeachingPlan(null);
-      setIsPlanView(false);
-      setLessonStarted(false);
-      setInteractionState('chat');
+      const restoredNode = session.selectedNode || null;
+      const restoredNodeState = restoredNode ? session.nodeSessions[restoredNode.id] : undefined;
+      setSelectedNode(restoredNode);
+      setChatMessages(restoredNodeState?.chatMessages || []);
+      setTeachingPlan(restoredNodeState?.teachingPlan || null);
+      setIsPlanView(restoredNodeState?.isPlanView || false);
+      setShowPlanPanel(restoredNodeState?.showPlanPanel ?? true);
+      setLessonStarted(restoredNodeState?.lessonStarted || false);
+      setInteractionState(restoredNodeState?.interactionState || 'chat');
+      setCurrentQuestion(restoredNodeState?.currentQuestion || '');
+      setCurrentQuestionId(restoredNodeState?.currentQuestionId || '');
+      setStepProgress(restoredNodeState?.stepProgress || session.savedStepProgress || null);
+      setLastEvalAnalysis(restoredNodeState?.lastEvalAnalysis || '');
       setShowLanding(false);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
       console.log('Deleting session:', sessionId, 'Current:', currentSessionId);
 
-      // NOTE: 获取要删除的 session 的 topic，用于删除后端对应的 JSON 文件
-      const sessionToDelete = graphSessions.find(s => s.id === sessionId);
-      if (sessionToDelete?.topic) {
-          try {
-              await api.deleteGraph(sessionToDelete.topic);
-          } catch (error) {
-              console.error('Failed to delete graph files:', error);
-          }
+      // Deleting a history card removes only its session snapshot. Graph and
+      // learner-state files may be shared by another session with the same
+      // topic, so they must not be deleted implicitly here.
+      try {
+          await api.deleteSession(sessionId);
+      } catch (error) {
+          console.warn('Session snapshot was already absent:', error);
       }
 
       setGraphSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -641,6 +969,8 @@ function App() {
           setCurrentTopic('');
           setCurrentGoal('');
           setCurrentGraphLevel('');
+          setActiveCourseId('');
+          setActiveCourseTitle('');
           setLessonStarted(false);
           setInteractionState('chat');
           // Generate new ID for potential new session
@@ -654,7 +984,7 @@ function App() {
 
 
 
-  const handleNodeClick = (nodeId: string, nodeName: string, attributes: any) => {
+  const handleNodeClick = (nodeId: string, nodeName: string, attributes: GraphNodeAttributes) => {
     // 1. Save current session state if a node is selected
     if (selectedNode) {
         setNodeSessions(prev => ({
@@ -664,7 +994,12 @@ function App() {
                 teachingPlan,
                 isPlanView,
                 showPlanPanel,
-                lessonStarted
+                lessonStarted,
+                interactionState,
+                currentQuestion,
+                currentQuestionId,
+                stepProgress,
+                lastEvalAnalysis,
             }
         }));
     }
@@ -683,6 +1018,11 @@ function App() {
         setIsPlanView(savedSession.isPlanView);
         setShowPlanPanel(savedSession.showPlanPanel);
         setLessonStarted(savedSession.lessonStarted);
+        setInteractionState(savedSession.interactionState || 'chat');
+        setCurrentQuestion(savedSession.currentQuestion || '');
+        setCurrentQuestionId(savedSession.currentQuestionId || '');
+        setStepProgress(savedSession.stepProgress || null);
+        setLastEvalAnalysis(savedSession.lastEvalAnalysis || '');
     } else {
         // New session
         setChatMessages([]);
@@ -690,6 +1030,10 @@ function App() {
         setIsPlanView(false);
         setLessonStarted(false); // fresh node, lesson not started
         setInteractionState('chat');
+        setCurrentQuestion('');
+        setCurrentQuestionId('');
+        setStepProgress(null);
+        setLastEvalAnalysis('');
     }
   };
 
@@ -703,7 +1047,7 @@ function App() {
     setInteractionState('chat');
     try {
       toast.info(`Generating Teaching Plan for ${selectedNode.name}...`);
-      const attributes = (selectedNode as any).attributes || {};
+      const attributes = selectedNode.attributes || {};
       
       // NOTE: 文档模式使用 docStartLearning，主题模式使用 startLearning
       const response = docMode
@@ -723,6 +1067,7 @@ function App() {
             attributes.weight_A || 0,
             attributes.weight_B || 0.8,
             projectMode ? projectDescription : '',
+            activeCourseId || undefined,
           );
       
       // Store the plan
@@ -733,14 +1078,14 @@ function App() {
       setChatMessages(prev => {
         // If there's no message yet (first time), just set the plan
         if (prev.length === 0) {
-          return [{ role: 'assistant', content: response.content }];
+          return [{ role: 'assistant', content: response.content, citations: response.citations, knowledgeScope: response.knowledge_scope }];
         }
         // Otherwise append the new plan
-        return [...prev, { role: 'assistant', content: response.content }];
+        return [...prev, { role: 'assistant', content: response.content, citations: response.citations, knowledgeScope: response.knowledge_scope }];
       });
       setIsPlanView(true); // Enable "Start Lesson" button
     } catch (error) {
-      toast.error('Failed to generate teaching plan');
+      handleRequestError(error, 'Failed to generate teaching plan');
       console.error(error);
     } finally {
       setIsChatLoading(false);
@@ -752,18 +1097,32 @@ function App() {
     setIsChatLoading(true);
     try {
         toast.info(`Starting lesson for ${selectedNode.name}...`);
-        // NOTE: 文档模式使用 docStartLesson
-        const lessonResponse = docMode
-          ? await api.docStartLesson(docId, selectedNode.name)
-          : await api.startLesson(currentTopic, selectedNode.name);
-        const step = lessonResponse.current_step ?? 0;
-        const total = lessonResponse.total_steps ?? 0;
-        const stepLabel = total > 0 ? `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n` : '';
-        setChatMessages([{
-            role: 'assistant',
-            content: stepLabel + lessonResponse.content,
-            sources: lessonResponse.sources || [],
-        }]);
+        let step = 0;
+        let total = 0;
+        if (docMode) {
+            const streamed = await streamAssistant('/doc/learning/lesson/stream', {
+                doc_id: docId, node_name: selectedNode.name,
+            }, { replaceMessages: true });
+            step = streamed.currentStep ?? 0;
+            total = streamed.totalSteps ?? 0;
+            if (total > 0) {
+                const label = `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n`;
+                setChatMessages((previous) => previous.map((item) => item.role === 'assistant' ? { ...item, content: label + item.content } : item));
+            }
+        } else {
+            const streamed = await streamAssistant('/learning/lesson/stream', {
+                topic: currentTopic,
+                course_id: activeCourseId || undefined,
+                node_name: selectedNode.name,
+                project_description: projectMode ? projectDescription : '',
+            }, { replaceMessages: true });
+            step = streamed.currentStep ?? 0;
+            total = streamed.totalSteps ?? 0;
+            if (total > 0) {
+                const label = `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n`;
+                setChatMessages((previous) => previous.map((item) => item.role === 'assistant' ? { ...item, content: label + item.content } : item));
+            }
+        }
         if (total > 0) {
             setStepProgress({ current: step, total });
         }
@@ -773,7 +1132,7 @@ function App() {
         // NOTE: 开始上课后默认隐藏教学计划面板，让用户聚焦课程内容
         setShowPlanPanel(false);
     } catch (error) {
-        toast.error('Failed to start lesson');
+        handleRequestError(error, 'Failed to start lesson');
         console.error(error);
     } finally {
         setIsChatLoading(false);
@@ -787,8 +1146,9 @@ function App() {
           // NOTE: 文档模式使用 docGenerateQuestion
           const questionResponse = docMode
             ? await api.docGenerateQuestion(docId, selectedNode.name)
-            : await api.generateQuestion(currentTopic, selectedNode.name);
+            : await api.generateQuestion(currentTopic, selectedNode.name, activeCourseId || undefined);
           setCurrentQuestion(questionResponse.question);
+          setCurrentQuestionId(questionResponse.question_id || '');
 
           // NOTE: 确保选择题选项在 Markdown 中正确换行
           // 支持 A) 和 A. 两种选项格式
@@ -797,11 +1157,11 @@ function App() {
 
           setChatMessages(prev => [
               ...prev,
-              { role: 'assistant', content: `**Quiz Time!** 🧠\n\n${formattedQuestion}` }
+              { role: 'assistant', content: `**Quiz Time!** 🧠\n\n${formattedQuestion}`, citations: questionResponse.citations, knowledgeScope: questionResponse.knowledge_scope }
           ]);
           setInteractionState('quiz');
       } catch (error) {
-          toast.error('Failed to generate quiz');
+          handleRequestError(error, 'Failed to generate quiz');
           console.error(error);
       } finally {
           setIsChatLoading(false);
@@ -818,18 +1178,20 @@ function App() {
       setIsChatLoading(true);
       try {
           // NOTE: 文档模式使用 docReteach
-          const result = docMode
-            ? await api.docReteach(docId, selectedNode.name)
-            : await api.reteach(currentTopic, selectedNode.name, '',
-                projectMode ? projectDescription : '');
-          setChatMessages(prev => [...prev, {
-              role: 'assistant',
-              content: '\uD83D\uDD04 **Reteaching this step**\n\n' + result.content,
-              sources: result.sources || [],
-          }]);
+          if (docMode) {
+              await streamAssistant('/doc/learning/reteach/stream', {
+                  doc_id: docId, node_name: selectedNode.name, error_analysis: '',
+              }, { prefix: '\uD83D\uDD04 **Reteaching this step**\n\n' });
+          } else {
+              await streamAssistant('/learning/reteach/stream', {
+                  topic: currentTopic, course_id: activeCourseId || undefined,
+                  node_name: selectedNode.name, error_analysis: '',
+                  project_description: projectMode ? projectDescription : '',
+              }, { prefix: '\uD83D\uDD04 **Reteaching this step**\n\n' });
+          }
           setInteractionState('step_taught');
       } catch (error) {
-          toast.error('Reteach failed');
+          handleRequestError(error, 'Reteach failed');
           console.error(error);
       } finally {
           setIsChatLoading(false);
@@ -841,18 +1203,20 @@ function App() {
       setIsChatLoading(true);
       try {
           // NOTE: 文档模式使用 docReteach
-          const result = docMode
-            ? await api.docReteach(docId, selectedNode.name, lastEvalAnalysis)
-            : await api.reteach(currentTopic, selectedNode.name, lastEvalAnalysis,
-                projectMode ? projectDescription : '');
-          setChatMessages(prev => [...prev, {
-              role: 'assistant',
-              content: '\uD83D\uDD04 **Reteaching based on errors**\n\n' + result.content,
-              sources: result.sources || [],
-          }]);
+          if (docMode) {
+              await streamAssistant('/doc/learning/reteach/stream', {
+                  doc_id: docId, node_name: selectedNode.name, error_analysis: lastEvalAnalysis,
+              }, { prefix: '\uD83D\uDD04 **Reteaching based on errors**\n\n' });
+          } else {
+              await streamAssistant('/learning/reteach/stream', {
+                  topic: currentTopic, course_id: activeCourseId || undefined,
+                  node_name: selectedNode.name, error_analysis: lastEvalAnalysis,
+                  project_description: projectMode ? projectDescription : '',
+              }, { prefix: '\uD83D\uDD04 **Reteaching based on errors**\n\n' });
+          }
           setInteractionState('step_taught');
       } catch (error) {
-          toast.error('Reteach failed');
+          handleRequestError(error, 'Reteach failed');
           console.error(error);
       } finally {
           setIsChatLoading(false);
@@ -863,29 +1227,51 @@ function App() {
       if (!selectedNode) return;
       setIsChatLoading(true);
       try {
-          // NOTE: 文档模式使用 docNextStep
-          const result = docMode
-            ? await api.docNextStep(docId, selectedNode.name)
-            : await api.nextStep(currentTopic, selectedNode.name);
-          if (result.is_plan_completed) {
-              setChatMessages(prev => [...prev, { role: 'assistant', content: result.content }]);
-              setStepProgress(null);
-              setInteractionState('chat');
-              toast.success('All steps completed!');
-          } else {
-              const step = result.current_step ?? 0;
-              const total = result.total_steps ?? 0;
+          if (docMode) {
+              const result = await streamAssistant('/doc/learning/next-step/stream', {
+                  doc_id: docId, node_name: selectedNode.name,
+              });
+              if (result.isPlanCompleted) {
+                  setStepProgress(null);
+                  setInteractionState('chat');
+                  toast.success('All steps completed!');
+                  return;
+              }
+              const step = result.currentStep ?? 0;
+              const total = result.totalSteps ?? 0;
               const stepLabel = total > 0 ? `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n` : '';
-              setChatMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: stepLabel + result.content,
-                  sources: result.sources || [],
-              }]);
+              if (stepLabel) setChatMessages((previous) => previous.map((item, index) =>
+                  index === previous.length - 1 && item.role === 'assistant' ? { ...item, content: stepLabel + item.content } : item
+              ));
+              setStepProgress({ current: step, total });
+              setInteractionState('step_taught');
+          } else {
+              const result = await streamAssistant('/learning/next-step/stream', {
+                  topic: currentTopic, course_id: activeCourseId || undefined,
+                  node_name: selectedNode.name,
+                  project_description: projectMode ? projectDescription : '',
+              });
+              if (result.isPlanCompleted) {
+                  setStepProgress(null);
+                  setInteractionState('chat');
+                  toast.success('All steps completed!');
+                  return;
+              }
+              const step = result.currentStep ?? 0;
+              const total = result.totalSteps ?? 0;
+              const stepLabel = total > 0 ? `\uD83D\uDCD6 **Step ${step + 1}/${total}**\n\n` : '';
+              if (stepLabel) {
+                  setChatMessages((previous) => previous.map((item, index) =>
+                      index === previous.length - 1 && item.role === 'assistant'
+                          ? { ...item, content: stepLabel + item.content }
+                          : item
+                  ));
+              }
               setStepProgress({ current: step, total });
               setInteractionState('step_taught');
           }
       } catch (error) {
-          toast.error('Failed to advance to next step');
+          handleRequestError(error, 'Failed to advance to next step');
           console.error(error);
       } finally {
           setIsChatLoading(false);
@@ -980,8 +1366,8 @@ function App() {
           // Quiz Mode: Evaluate Answer
           // NOTE: 文档模式使用 docEvaluateAnswer
           const evaluation = docMode
-            ? await api.docEvaluateAnswer(docId, selectedNode.name, currentQuestion, message)
-            : await api.evaluateAnswer(currentTopic, selectedNode.name, currentQuestion, message);
+            ? await api.docEvaluateAnswer(docId, selectedNode.name, currentQuestion, message, currentQuestionId)
+            : await api.evaluateAnswer(currentTopic, selectedNode.name, currentQuestion, message, activeCourseId || undefined, currentQuestionId);
           
            const feedbackContent = `
 **测验结果** 📝
@@ -994,7 +1380,7 @@ ${evaluation.feedback}
 
           setChatMessages(prev => [
               ...prev,
-              { role: 'assistant', content: feedbackContent }
+              { role: 'assistant', content: feedbackContent, citations: evaluation.citations, knowledgeScope: evaluation.knowledge_scope }
           ]);
           
           setLastEvalAnalysis(evaluation.analysis);
@@ -1012,18 +1398,27 @@ ${evaluation.feedback}
           }));
 
           // NOTE: 文档模式使用 docChat
-          const response = docMode
-            ? await api.docChat(docId, selectedNode.name, message, history, image)
-            : await api.chat(currentTopic, selectedNode.name, message, history, image,
-                projectMode ? projectDescription : '');
-          setChatMessages(prev => [...prev, {
-            role: 'assistant',
-            content: response.response,
-            sources: response.sources || [],
-          }]);
+          if (docMode) {
+              await streamAssistant('/doc/learning/chat/stream', {
+                  doc_id: docId, node_name: selectedNode.name, question: message,
+                  history, image, max_tokens: chatOptions.maxTokens, thinking: chatOptions.thinking,
+              });
+          } else {
+              await streamAssistant('/learning/chat/stream', {
+                  topic: currentTopic,
+                  course_id: activeCourseId || undefined,
+                  node_name: selectedNode.name,
+                  question: message,
+                  image,
+                  history,
+                  project_description: projectMode ? projectDescription : '',
+                  max_tokens: chatOptions.maxTokens,
+                  thinking: chatOptions.thinking,
+              });
+          }
       }
     } catch (error) {
-      toast.error('Failed to send message');
+      handleRequestError(error, 'Failed to send message');
       console.error(error);
     } finally {
       setIsChatLoading(false);
@@ -1042,7 +1437,16 @@ ${evaluation.feedback}
        />
 
        {showLanding ? (
-           <HomePage onStart={() => setShowLanding(false)} onUploadDoc={() => setIsDialogOpen(true)} />
+           <HomePage
+             onStart={() => setIsDialogOpen(true)}
+             onUploadDoc={() => setIsDialogOpen(true)}
+             onSelectCourse={handleStartCourse}
+             sessions={graphSessions}
+             onResumeSession={(sessionId) => void handleLoadSession(sessionId)}
+             onDeleteSession={(sessionId) => void handleDeleteSession(sessionId)}
+             courseRecovery={courseRecovery}
+             onCourseRecoveryHandled={() => setCourseRecovery(null)}
+           />
        ) : (
            <div className="flex flex-col h-full bg-background/50"> {/* Soft background wrapper */}
               <header className="px-6 py-4 flex items-center justify-between bg-transparent z-10 relative">
@@ -1079,11 +1483,11 @@ ${evaluation.feedback}
                         <Button 
                             variant="ghost"
                             size="icon"
-                            onClick={() => setTheme(theme === 'light' ? 'eye-care' : 'light')}
+                            onClick={() => setTheme(theme === 'dark' ? 'eye-care' : 'dark')}
                             className={theme === 'eye-care' ? "h-9 w-9 bg-amber-100/50 text-amber-900 hover:bg-amber-200/50 rounded-xl" : "h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-white/50 rounded-xl"}
-                            title={theme === 'light' ? "开启护眼模式" : "切换回白天模式"}
+                            title={theme === 'dark' ? "切换到护眼亮色模式" : "切换到高对比夜间模式"}
                         >
-                            {theme === 'light' ? <BookOpen className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                            {theme === 'dark' ? <BookOpen className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                         </Button>
 
                         {teachingPlan && !isPlanView && (
@@ -1150,7 +1554,7 @@ ${evaluation.feedback}
                     <Button
                       onClick={() => setIsAddNodeDialogOpen(true)}
                       variant="outline"
-                      className="shadow-md hover:shadow-lg transition-all duration-300 rounded-xl px-5 border-emerald-300 text-black hover:bg-emerald-50 hover:border-emerald-400"
+                      className="shadow-md hover:shadow-lg transition-all duration-300 rounded-xl px-5 border-emerald-300 text-black dark:text-emerald-100 dark:border-emerald-400/60 dark:hover:bg-emerald-400/10 hover:bg-emerald-50 hover:border-emerald-400"
                     >
                       <Plus className="mr-2 h-4 w-4" />
                       {t('add_node.btn')}
@@ -1194,41 +1598,9 @@ ${evaluation.feedback}
                                             </CardHeader>
                                             <CardContent className="p-0 flex-1 overflow-hidden">
                                                 <ScrollArea className="h-full pr-4">
-                                                    <div className="text-sm text-foreground leading-relaxed ai-content">
-                                                        <ReactMarkdown 
-                                                            remarkPlugins={[remarkGfm, remarkMath]}
-                                                            rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
-                                                            components={{
-                                                                ul: ({node, ...props}) => <ul className="list-disc pl-8 my-2" {...props} />,
-                                                                ol: ({node, ...props}) => <ol className="list-decimal pl-8 my-2" {...props} />,
-                                                                h1: ({node, ...props}) => <h1 className="text-xl font-bold my-2" {...props} />,
-                                                                h2: ({node, ...props}) => <h2 className="text-lg font-bold my-2" {...props} />,
-                                                                h3: ({node, ...props}) => <h3 className="text-base font-bold my-1" {...props} />,
-                                                                a: ({node, ...props}) => <a className="text-blue-500 hover:underline" {...props} />,
-                                                                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 italic my-2" {...props} />,
-                                                                code: ({node, inline, className, children, ...props}: any) => {
-                                                                    const match = /language-(\w+)/.exec(className || '');
-                                                                    return !inline && match ? (
-                                                                        <SyntaxHighlighter
-                                                                            {...props}
-                                                                            style={vscDarkPlus}
-                                                                            language={match[1]}
-                                                                            PreTag="div"
-                                                                            customStyle={{ borderRadius: '1rem' }}
-                                                                        >
-                                                                            {String(children).replace(/\n$/, '')}
-                                                                        </SyntaxHighlighter>
-                                                                    ) : (
-                                                                        <code className="bg-muted px-1 rounded-md font-mono text-xs" {...props}>
-                                                                            {children}
-                                                                        </code>
-                                                                    );
-                                                                },
-                                                            }}
-                                                        >
-                                                            {teachingPlan}
-                                                        </ReactMarkdown>
-                                                    </div>
+                                                    <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">正在整理教学计划…</div>}>
+                                                      <MarkdownContent content={teachingPlan} className="text-sm text-foreground leading-relaxed" />
+                                                    </Suspense>
                                                 </ScrollArea>
                                             </CardContent>
                                         </Card>
@@ -1255,21 +1627,25 @@ ${evaluation.feedback}
                                     ) : (
                                         <div className="flex flex-col h-full min-h-0">
                                             <div className="flex-1 min-h-0">
-                                                <ChatInterface 
-                                                    messages={chatMessages} 
-                                                    onSendMessage={handleSendMessage}
-                                                    currentNodeName={selectedNode?.name || null}
-                                                    isLoading={isChatLoading}
-                                                    showStartLesson={isPlanView}
-                                                    onStartLesson={handleConfirmStartLesson}
-                                                    interactionState={interactionState}
-                                                    onStartQuiz={handleStartQuiz}
+                                                <Suspense fallback={<div className="h-full grid place-items-center text-sm text-muted-foreground">正在打开学习助手…</div>}>
+                                                  <ChatInterface 
+                                                      messages={chatMessages} 
+                                                      onSendMessage={handleSendMessage}
+                                                      currentNodeName={selectedNode?.name || null}
+                                                      isLoading={isChatLoading}
+                                                      showStartLesson={isPlanView}
+                                                      onStartLesson={handleConfirmStartLesson}
+                                                      interactionState={interactionState}
+                                                      onStartQuiz={handleStartQuiz}
                                                     onExplainAgain={handleExplainAgain}
                                                     onReteachStep={handleReteachStep}
                                                     onNextStep={handleNextStep}
                                                     onReteachFromErrors={handleReteachFromErrors}
-                                                    stepProgress={stepProgress}
-                                                />
+                                                      stepProgress={stepProgress}
+                                                      chatOptions={chatOptions}
+                                                      onChatOptionsChange={setChatOptions}
+                                                  />
+                                                </Suspense>
                                             </div>
                                         </div>
                                     )}
@@ -1282,19 +1658,20 @@ ${evaluation.feedback}
                             <>
                                 <ResizableHandle withHandle className="bg-black dark:bg-transparent opacity-80 dark:opacity-50 hover:opacity-100 w-[1.5px] relative z-10" />
                                 <ResizablePanel defaultSize={teachingPlan && !isPlanView ? "40" : "60"} minSize="10">
-                                    {showIDE ? (
-                                        <IDEPanel />
-                                    ) : (
-                                        <div className="h-full relative bg-transparent">
-                                            <KnowledgeGraph 
-                                                data={graphData} 
-                                                onNodeClick={handleNodeClick} 
-                                                onNodeContextMenu={handleNodeContextMenu}
-                                                theme={theme}
-                                                onViewModeChange={setGraphViewMode}
-                                                initialViewMode={graphViewMode}
-                                            />
-                                            <div className="absolute top-4 left-4 z-10 w-auto">
+                                    <Suspense fallback={<div className="h-full grid place-items-center text-sm text-muted-foreground">正在装载学习空间…</div>}>
+                                      {showIDE ? (
+                                          <IDEPanel />
+                                      ) : (
+                                          <div className="graph-workspace h-full relative bg-transparent">
+                                              <KnowledgeGraph 
+                                                  data={graphData} 
+                                                  onNodeClick={handleNodeClick} 
+                                                  onNodeContextMenu={handleNodeContextMenu}
+                                                  theme={theme}
+                                                  onViewModeChange={setGraphViewMode}
+                                                  initialViewMode={graphViewMode}
+                                              />
+                                            <div className="graph-dashboard-layer absolute z-10">
                                                 <Dashboard state={learnerState} graphData={graphData} viewMode={graphViewMode} />
                                             </div>
                                             {!graphData && !isGenerating && (
@@ -1328,8 +1705,9 @@ ${evaluation.feedback}
                                                     </div>
                                                 </div>
                                             )}
-                                        </div>
-                                    )}
+                                          </div>
+                                      )}
+                                    </Suspense>
                                 </ResizablePanel>
                             </>
                         )}

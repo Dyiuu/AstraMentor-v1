@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional, Dict, Any
 
 class GenerateGraphRequest(BaseModel):
     topic: str
+    course_id: Optional[str] = None
     learning_goal: Optional[str] = ""
     current_level: Optional[str] = "零基础"
     target_level: Optional[str] = "掌握核心概念"
@@ -10,6 +11,7 @@ class GenerateGraphRequest(BaseModel):
 
 class StartLearningRequest(BaseModel):
     topic: str = ""
+    course_id: Optional[str] = None
     node_name: str
     node_description: Optional[str] = ""
     user_note: Optional[str] = ""
@@ -19,6 +21,7 @@ class StartLearningRequest(BaseModel):
 
 class UpdateNodeRequest(BaseModel):
     topic: str = ""
+    course_id: Optional[str] = None
     node_name: str
     user_note: Optional[str] = None
     target_mastery: Optional[float] = None
@@ -26,22 +29,28 @@ class UpdateNodeRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     topic: str = ""
+    course_id: Optional[str] = None
     node_name: str
     question: str
     image: Optional[str] = None
-    history: List[Dict[str, str]] = []
+    history: List[Dict[str, str]] = Field(default_factory=list)
     project_description: Optional[str] = ""  # 项目模式下的项目描述
+    max_tokens: int = Field(default=4096, ge=256, le=32768)
+    thinking: bool = False
 
 class EvaluateRequest(BaseModel):
     topic: str = ""
+    course_id: Optional[str] = None
     node_name: str
     question: str
     answer: str
     project_description: Optional[str] = ""  # 项目模式下的项目描述
+    question_id: Optional[str] = None
 
 class ReteachRequest(BaseModel):
     """根据错误分析重新讲解当前步骤"""
     topic: str = ""
+    course_id: Optional[str] = None
     node_name: str
     error_analysis: str = ""
     project_description: Optional[str] = ""  # 项目模式下的项目描述
@@ -52,9 +61,24 @@ class GroundingSource(BaseModel):
     url: str = ""
 
 
+class CourseCitation(BaseModel):
+    citation_id: str
+    course_id: str
+    document_title: str
+    section_path: List[str] = Field(default_factory=list)
+    excerpt: str
+    source_file: str
+    line_start: int
+    line_end: int
+    score: float = 0.0
+    retrieval: str = "bm25"
+
+
 class TeachingContentResponse(BaseModel):
     content: str
     sources: Optional[List[GroundingSource]] = None
+    citations: List[CourseCitation] = Field(default_factory=list)
+    knowledge_scope: str = "extension"
     # NOTE: 步骤进度字段，用于前端展示教学计划推进状态
     current_step: Optional[int] = None
     total_steps: Optional[int] = None
@@ -66,10 +90,14 @@ class EvaluationResponse(BaseModel):
     analysis: str
     is_mastered: bool
     new_mastery: float
+    citations: List[CourseCitation] = Field(default_factory=list)
+    knowledge_scope: str = "extension"
+    question_id: Optional[str] = None
 
 class SaveGraphRequest(BaseModel):
     """保存/更新图谱数据到磁盘"""
     topic: str
+    course_id: Optional[str] = None
     graph_data: Dict[str, Any]
 
 
@@ -86,6 +114,7 @@ class RunCodeResponse(BaseModel):
 class AddNodeRequest(BaseModel):
     """图谱扩展请求：用户手动添加知识节点"""
     topic: str
+    course_id: Optional[str] = None
     new_node_name: str
     current_mastery: float = 0.0
     target_mastery: float = 0.8
@@ -131,7 +160,9 @@ class DocChatRequest(BaseModel):
     node_name: str
     question: str
     image: Optional[str] = None
-    history: List[Dict[str, str]] = []
+    history: List[Dict[str, str]] = Field(default_factory=list)
+    max_tokens: int = Field(default=4096, ge=256, le=32768)
+    thinking: bool = False
 
 class DocEvaluateRequest(BaseModel):
     """文档模式评估请求"""
@@ -139,9 +170,42 @@ class DocEvaluateRequest(BaseModel):
     node_name: str
     question: str
     answer: str
+    question_id: Optional[str] = None
 
 class DocReteachRequest(BaseModel):
     """文档模式重新讲解请求"""
     doc_id: str
     node_name: str
     error_analysis: str = ""
+
+
+class CourseSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class SessionSnapshotRequest(BaseModel):
+    """Flexible, versioned UI session snapshot persisted by the backend."""
+
+    model_config = ConfigDict(extra="allow")
+
+    schema_version: int = 1
+    session_id: str = Field(min_length=1, max_length=128)
+    mode: str = "topic"
+    title: str = "未命名学习"
+    internal_topic: str = ""
+    course_id: Optional[str] = None
+    course_title: Optional[str] = None
+    graph_data: Dict[str, Any] = Field(default_factory=dict)
+    node_sessions: Dict[str, Any] = Field(default_factory=dict)
+    selected_node: Optional[Dict[str, Any]] = None
+    step_progress: Optional[Dict[str, int]] = None
+    learning_goal: str = ""
+    current_level: str = ""
+    learner_state: Optional[Dict[str, Any]] = None
+    average_mastery: float = 0.0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    doc_id: Optional[str] = None
+    doc_filename: Optional[str] = None
+    project_description: Optional[str] = None

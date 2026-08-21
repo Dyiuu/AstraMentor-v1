@@ -1,0 +1,36 @@
+{
+  "id": "llm-app-development",
+  "title": "大模型应用开发",
+  "description": "面向大模型应用开发岗位的模型接入、结构化输出、多模态、工具调用与流式交互课程",
+  "locale": "zh-CN",
+  "version": "1.0",
+  "category": "人工智能应用",
+  "order": 20,
+  "hours": 32,
+  "level": "intermediate",
+  "track": "AI 应用工程",
+  "prerequisite_skills": [
+    "能够使用 Python 开发和调试应用",
+    "理解 HTTP、JSON、异步调用和环境变量",
+    "能够使用 Git 和基本 Linux 命令"
+  ],
+  "recommended_courses": [],
+  "job_roles": ["大模型应用开发工程师", "生成式 AI 应用工程师"],
+  "competencies": [
+    "封装可靠的 OpenAI 兼容模型客户端",
+    "实现结构化、多模态与单轮工具调用功能",
+    "控制上下文预算并交付流式大模型应用服务"
+  ],
+  "capstone": "开发一个可配置、可验证、支持流式交互的大模型业务应用",
+  "tags": ["LLM", "模型 API", "结构化输出", "多模态", "工具调用", "流式输出"],
+  "materials": [
+    {"id": "model-client", "title": "接入大模型服务", "path": "materials/01-接入大模型服务.md"},
+    {"id": "prompt-template", "title": "构建可靠提示模板", "path": "materials/02-构建可靠提示模板.md"},
+    {"id": "structured-output", "title": "生成结构化数据", "path": "materials/03-生成结构化数据.md"},
+    {"id": "context-budget", "title": "管理上下文与成本", "path": "materials/04-管理上下文与成本.md"},
+    {"id": "multimodal-input", "title": "开发多模态应用", "path": "materials/05-开发多模态应用.md"},
+    {"id": "tool-calling", "title": "实现函数与工具调用", "path": "materials/06-实现函数与工具调用.md"},
+    {"id": "streaming-interaction", "title": "优化交互体验", "path": "materials/07-优化交互体验.md"},
+    {"id": "capstone", "title": "综合项目", "path": "materials/08-综合项目.md"}
+  ]
+}

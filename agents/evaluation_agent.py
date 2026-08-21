@@ -68,7 +68,8 @@ class EvaluationAgent:
         knowledge_point: KnowledgePoint,
         question: str,
         answer: str,
-        question_type: str = ""
+        question_type: str = "",
+        context: str = "",
     ) -> EvaluationResult:
         """
         评估用户回答
@@ -87,7 +88,8 @@ class EvaluationAgent:
             topic=knowledge_point.name,
             question=question,
             answer=answer,
-            current_score=knowledge_point.actual_mastery
+            current_score=knowledge_point.actual_mastery,
+            context=context,
         )
         
         # 2. 确定任务难度
@@ -132,7 +134,8 @@ class EvaluationAgent:
         topic: str,
         question: str,
         answer: str,
-        current_score: float
+        current_score: float,
+        context: str = "",
     ) -> dict:
         """
         使用AI获取评分
@@ -152,6 +155,8 @@ class EvaluationAgent:
             answer=answer,
             current_score=current_score
         )
+        if context:
+            prompt += f"\n\n{context}\n\n评分时以课程教材证据为知识边界。"
         
         result = self.api_client.generate_json(
             prompt=prompt,

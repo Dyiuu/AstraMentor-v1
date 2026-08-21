@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "course_id": "ai-app-production",
+  "course_version": "1.0",
+  "source_hashes": {
+    "materials/01-制定质量标准.md": "391934ecb9a4308cbb3f25953afb9809b0f99c835303ce939f8a1e5c55db1b77",
+    "materials/02-自动化功能测试.md": "5585b8e795a6994a0015104952910007e009ba8256b5f7c3568be45a27f8a239",
+    "materials/03-开展效果评测.md": "80f8fa14a75001845fd0b3d3a4861557af6a4df7e191d5d3aefd70cffd55b863",
+    "materials/04-建立可观测体系.md": "bd7a87fa0adea09bed519202553995dba29b56d808912565e138f6882a776c1f",
+    "materials/05-防御AI应用风险.md": "3993c410388f02e255d50334fbdd527377c6fef69f2a26208f4a9418bf26709f",
+    "materials/06-优化性能和成本.md": "e77e6d5ea192ee356e620a82a9f86c29a9902667f518cb598e50ff473c9f6aaa",
+    "materials/07-完成工程化部署.md": "caae29586397e4242a096219eade55f6afdb858734017bf2db63b65c2bf6e48e",
+    "materials/08-综合项目.md": "419abda7a0dbb409319841f89ceb4760fc3768bb8a1fabb23af2524f1ee0d804"
+  },
+  "artifact_hashes": {
+    "chunks.jsonl": "1253b363ac0f914d4ca47e8186c3cebacdb6d050a57996ab7e0c4d07f70d428b",
+    "bm25.json": "da5341e3036685365e0a051285bddcc68711afcc6eabbd99d97293af0af4eabc"
+  },
+  "chunking": {
+    "target_chars": 700,
+    "max_chars": 900,
+    "overlap_chars": 120
+  },
+  "chunk_count": 170,
+  "section_count": 169,
+  "embedding": null,
+  "built_at": "2026-08-20T15:59:12.752595+00:00"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "course_id": "llm-app-development",
+  "course_version": "1.0",
+  "source_hashes": {
+    "materials/01-接入大模型服务.md": "03d521d1d233c74bb75a0c54d4edcedb5d883c6f05c178c3af3f0956bd77e2f8",
+    "materials/02-构建可靠提示模板.md": "d94197d52c378b850bbf4aa174258d526899d54fe6f6471db0ebbf89fb6c94e6",
+    "materials/03-生成结构化数据.md": "e8deeb5d63259c648d5ca1ef0e9c199ba2ceea2b6294fc8472db677ee58f6515",
+    "materials/04-管理上下文与成本.md": "67aa353f23926e70c50c4aefdc53147761950b9d7b3003c5d96bee02d6b3826f",
+    "materials/05-开发多模态应用.md": "6036fb6dad084a3255b2bd865110eb5e07782edc0090541546d51b7b4b330f8a",
+    "materials/06-实现函数与工具调用.md": "d316414a62a3cb95bba0d6e0d7966009361ee6bbf3df6051e025ea857f08e34f",
+    "materials/07-优化交互体验.md": "7989fe66c7c6af526f8bd48baecaeb7f60eb906427c159e551ad9cb7d1fc0da0",
+    "materials/08-综合项目.md": "ea875382e36d87d1d8b8dd25a9b6837e876b0db1cd8bc537f1224283ccfcf2d1"
+  },
+  "artifact_hashes": {
+    "chunks.jsonl": "398222430b95a4b97f38afb2dd3380bc17226e4205a32803272c20325989a443",
+    "bm25.json": "a81360a01b15fed3368666551e923dad40dfacdcf6a3d765acd70d43b7644260"
+  },
+  "chunking": {
+    "target_chars": 700,
+    "max_chars": 900,
+    "overlap_chars": 120
+  },
+  "chunk_count": 148,
+  "section_count": 147,
+  "embedding": null,
+  "built_at": "2026-08-20T15:59:12.393843+00:00"
+}

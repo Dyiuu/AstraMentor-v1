@@ -7,15 +7,19 @@
 
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Dict, Any
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 
 from services.pdf_parser import parse_pdf, DocumentContext, get_chunks_text
 from services.learning_service import LearningService
+from backend.api import build_streaming_response
 from agents.doc_graph_agent import DocGraphAgent
 from utils.api_client import APIClient
+from services.streaming_service import encode_sse
 from core.doc_prompts import (
     get_doc_teaching_prompt,
     get_doc_question_prompt,
@@ -104,6 +108,33 @@ def _load_doc_graph(doc_id: str) -> dict | None:
             return json.load(f)
     except Exception:
         return None
+
+
+def _prepare_doc_lesson(service: LearningService, kp, source_text: str, error_analysis: str = "") -> dict:
+    """Build a current-step-only document lesson for the shared SSE transport."""
+    prompt = get_doc_teaching_prompt(
+        topic=kp.name,
+        current_score=kp.actual_mastery,
+        source_text=source_text,
+    )
+    plan_step = kp.get_current_plan_step()
+    if plan_step:
+        prompt += (
+            f"\n\n【当前教学步骤】\n步骤名称：{plan_step.get('name', '')}"
+            f"\n步骤内容：{plan_step.get('content', '')}"
+            "\n必须只讲当前步骤，不得提前讲后续步骤。"
+        )
+    if error_analysis:
+        prompt += f"\n\n【学生薄弱环节】\n{error_analysis}\n请换一种角度针对性重讲。"
+    return {
+        "prompt": prompt,
+        "temperature": 0.7,
+        "max_tokens": 2500,
+        "current_step": kp.current_step,
+        "total_steps": len(kp.teaching_plan),
+        "is_plan_completed": kp.is_plan_completed(),
+        "knowledge_scope": "document",
+    }
 
 
 # ============================================================================
@@ -245,12 +276,21 @@ async def doc_start_lesson(request: DocStartLearningRequest):
         current_score=kp.actual_mastery,
         source_text=source_text,
     )
+    plan_step = kp.get_current_plan_step()
+    if plan_step:
+        doc_prompt += (
+            f"\n\n【当前教学步骤】\n步骤名称：{plan_step.get('name', '')}"
+            f"\n步骤内容：{plan_step.get('content', '')}"
+            "\n只讲当前步骤，不要提前讲后续步骤。"
+        )
 
     # 通过 API 客户端直接生成教学内容（绕过 TeacherAgent 的默认提示词）
     result = service.api_client.generate(
         prompt=doc_prompt,
         temperature=0.7,
     )
+    kp.record_completed_teaching(result)
+    service.learner_state._auto_save()
 
     return TeachingContentResponse(
         content=result,
@@ -301,6 +341,8 @@ async def doc_next_step(request: DocStartLearningRequest):
         prompt=doc_prompt,
         temperature=0.7,
     )
+    kp.record_completed_teaching(result)
+    service.learner_state._auto_save()
 
     return TeachingContentResponse(
         content=result,
@@ -329,6 +371,14 @@ async def doc_reteach(request: DocReteachRequest):
         source_text=source_text,
     )
 
+    plan_step = kp.get_current_plan_step()
+    if plan_step:
+        doc_prompt += (
+            f"\n\n【当前教学步骤】\n步骤名称：{plan_step.get('name', '')}"
+            f"\n步骤内容：{plan_step.get('content', '')}"
+            "\n重新讲解也必须严格限定在当前步骤。"
+        )
+
     if request.error_analysis:
         doc_prompt += f"\n\n【学生的薄弱环节】\n{request.error_analysis}\n\n请针对以上薄弱环节，结合文档原文重新讲解。"
 
@@ -336,6 +386,8 @@ async def doc_reteach(request: DocReteachRequest):
         prompt=doc_prompt,
         temperature=0.7,
     )
+    kp.record_completed_teaching(result)
+    service.learner_state._auto_save()
 
     return TeachingContentResponse(
         content=result,
@@ -362,18 +414,42 @@ async def doc_generate_question(request: DocStartLearningRequest):
     if not kp:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
 
+    plan_step = kp.get_current_plan_step()
+    if plan_step and (
+        not kp.last_teaching_content or kp.last_taught_step_index != kp.current_step
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "quiz_context_stale", "message": "请先完成当前步骤的讲解，再生成测验题。"},
+        )
+
     doc_prompt = get_doc_question_prompt(
         topic=kp.name,
         current_score=kp.actual_mastery,
         source_text=source_text,
     )
+    if plan_step:
+        doc_prompt += f"""
+
+【本次测验唯一范围】
+步骤名称：{plan_step.get('name', '')}
+步骤内容：{plan_step.get('content', '')}
+刚刚完成的讲解：{kp.last_teaching_content}
+
+只能考查当前步骤中刚刚实际讲过的内容，原文不得用于扩大测验范围。"""
 
     question = service.api_client.generate(
         prompt=doc_prompt,
         temperature=0.5,
     )
 
-    return {"question": question}
+    question_id = uuid.uuid4().hex
+    kp.active_question_id = question_id
+    kp.active_question_text = question
+    kp.active_question_step_index = kp.current_step
+    kp.active_question_plan_version = kp.plan_version
+    service.learner_state._auto_save()
+    return {"question": question, "question_id": question_id}
 
 
 @doc_router.post("/learning/evaluate")
@@ -387,6 +463,17 @@ async def doc_evaluate(request: DocEvaluateRequest):
     kp = service.get_knowledge_point(request.node_name)
     if not kp:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
+
+    if request.question_id and (
+        request.question_id != kp.active_question_id
+        or kp.active_question_step_index != kp.current_step
+        or kp.active_question_plan_version != kp.plan_version
+        or request.question != kp.active_question_text
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "quiz_context_stale", "message": "题目与当前教学步骤不匹配，请重新生成。"},
+        )
 
     # NOTE: 使用文档模式评分提示词，注入原文上下文
     doc_prompt = get_doc_evaluation_prompt(
@@ -419,6 +506,7 @@ async def doc_evaluate(request: DocEvaluateRequest):
         new_mastery = kp.actual_mastery * (1 - alpha) + score * alpha
         kp.update_mastery(new_mastery, score, feedback)
 
+    kp.clear_quiz_context()
     service.learner_state._auto_save()
 
     return EvaluationResponse(
@@ -470,6 +558,94 @@ async def doc_chat(request: DocChatRequest):
         "response": result["content"],
         "sources": result.get("sources", []),
     }
+
+
+@doc_router.post("/learning/lesson/stream")
+async def doc_start_lesson_stream(request: DocStartLearningRequest):
+    doc_context = _get_doc_context(request.doc_id)
+    graph_data = _load_doc_graph(request.doc_id)
+    source_text = _get_node_source_text(doc_context, request.node_name, graph_data or {})
+    service = _get_doc_service(request.doc_id)
+    kp = service.get_knowledge_point(request.node_name)
+    if not kp:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    return build_streaming_response(
+        service,
+        _prepare_doc_lesson(service, kp, source_text),
+        knowledge_point=kp,
+        commit_teaching=True,
+    )
+
+
+@doc_router.post("/learning/next-step/stream")
+async def doc_next_step_stream(request: DocStartLearningRequest):
+    doc_context = _get_doc_context(request.doc_id)
+    graph_data = _load_doc_graph(request.doc_id)
+    source_text = _get_node_source_text(doc_context, request.node_name, graph_data or {})
+    service = _get_doc_service(request.doc_id)
+    kp = service.get_knowledge_point(request.node_name)
+    if not kp:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    kp.advance_step()
+    service.learner_state._auto_save()
+    if kp.is_plan_completed():
+        meta = {"current_step": kp.current_step, "total_steps": len(kp.teaching_plan), "is_plan_completed": True}
+
+        def completed_events():
+            yield encode_sse("meta", meta)
+            yield encode_sse("content_delta", {"type": "content_delta", "text": "🎉 所有教学步骤已完成！恭喜你完成了本知识点的学习！"})
+            yield encode_sse("done", meta)
+
+        return StreamingResponse(completed_events(), media_type="text/event-stream")
+    return build_streaming_response(
+        service,
+        _prepare_doc_lesson(service, kp, source_text),
+        knowledge_point=kp,
+        commit_teaching=True,
+    )
+
+
+@doc_router.post("/learning/reteach/stream")
+async def doc_reteach_stream(request: DocReteachRequest):
+    doc_context = _get_doc_context(request.doc_id)
+    graph_data = _load_doc_graph(request.doc_id)
+    source_text = _get_node_source_text(doc_context, request.node_name, graph_data or {})
+    service = _get_doc_service(request.doc_id)
+    kp = service.get_knowledge_point(request.node_name)
+    if not kp:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    return build_streaming_response(
+        service,
+        _prepare_doc_lesson(service, kp, source_text, request.error_analysis),
+        knowledge_point=kp,
+        commit_teaching=True,
+    )
+
+
+@doc_router.post("/learning/chat/stream")
+async def doc_chat_stream(request: DocChatRequest):
+    doc_context = _get_doc_context(request.doc_id)
+    graph_data = _load_doc_graph(request.doc_id)
+    source_text = _get_node_source_text(doc_context, request.node_name, graph_data or {})
+    service = _get_doc_service(request.doc_id)
+    kp = service.get_knowledge_point(request.node_name)
+    if not kp:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    document_context = f"【文档原文参考】\n{source_text}\n请以文档原文为边界回答，超出范围时明确说明。"
+    prepared = service.teacher.prepare_discuss_prompt(
+        kp,
+        teaching_content=document_context,
+        question=request.question,
+        discussion_history=request.history,
+    )
+    prepared["knowledge_scope"] = "document"
+    return build_streaming_response(
+        service,
+        prepared,
+        image=request.image,
+        max_tokens=request.max_tokens,
+        thinking=request.thinking,
+    )
 
 
 # ============================================================================

@@ -1,0 +1,142 @@
+[
+  {
+    "id": "llm-structured-output",
+    "course_id": "llm-app-development",
+    "query": "JSON Schema 四层正确性 结构化业务对象校验",
+    "expected_material_id": "structured-output",
+    "expected_section": "四层正确性"
+  },
+  {
+    "id": "llm-context-budget",
+    "course_id": "llm-app-development",
+    "query": "上下文预算不是最大输出参数 Token 成本",
+    "expected_material_id": "context-budget",
+    "expected_section": "上下文预算不是最大输出参数"
+  },
+  {
+    "id": "llm-multimodal",
+    "course_id": "llm-app-development",
+    "query": "多模态消息 能力差异 图片输入模型",
+    "expected_material_id": "multimodal-input",
+    "expected_section": "多模态消息与能力差异"
+  },
+  {
+    "id": "llm-tool-parameters",
+    "course_id": "llm-app-development",
+    "query": "工具契约应窄而可验证 JSON Schema 参数",
+    "expected_material_id": "tool-calling",
+    "expected_section": "工具契约应窄而可验证"
+  },
+  {
+    "id": "llm-stream-cancel",
+    "course_id": "llm-app-development",
+    "query": "SSE 流式输出 取消是端到端资源释放",
+    "expected_material_id": "streaming-interaction",
+    "expected_section": "取消是端到端资源释放"
+  },
+  {
+    "id": "rag-chunking",
+    "course_id": "rag-knowledge-engineering",
+    "query": "标题感知切分 标题感知切分 粒度 重叠窗口",
+    "expected_material_id": "chunking",
+    "expected_section": "重叠窗口"
+  },
+  {
+    "id": "rag-hybrid-retrieval",
+    "course_id": "rag-knowledge-engineering",
+    "query": "混合检索互补而非替代 混合检索 BM25 向量 互补",
+    "expected_material_id": "retrieval-optimization",
+    "expected_section": "混合检索互补而非替代"
+  },
+  {
+    "id": "rag-reranking",
+    "course_id": "rag-knowledge-engineering",
+    "query": "重排序 reranker 候选结果 精排 延迟",
+    "expected_material_id": "retrieval-optimization",
+    "expected_section": "重排序与成本"
+  },
+  {
+    "id": "rag-citation-refusal",
+    "course_id": "rag-knowledge-engineering",
+    "query": "证据不足 拒答 引用可定位 依据生成",
+    "expected_material_id": "grounded-generation",
+    "expected_section": "拒答是结构化结果"
+  },
+  {
+    "id": "rag-recall-at-k",
+    "course_id": "rag-knowledge-engineering",
+    "query": "Recall@K 检索评测 标注查询 回归门禁",
+    "expected_material_id": "rag-evaluation",
+    "expected_section": "Recall@K 与 MRR"
+  },
+  {
+    "id": "agent-loop-termination",
+    "course_id": "agent-engineering",
+    "query": "Agent 多层终止条件 最大步数 截止时间",
+    "expected_material_id": "agent-loop",
+    "expected_section": "多层终止条件"
+  },
+  {
+    "id": "agent-tool-recovery",
+    "course_id": "agent-engineering",
+    "query": "工具错误是协议的一部分 可恢复 不可恢复 retryable",
+    "expected_material_id": "tool-system",
+    "expected_section": "错误是协议的一部分"
+  },
+  {
+    "id": "agent-memory",
+    "course_id": "agent-engineering",
+    "query": "会话记忆 摘要 冲突 遗忘 用户更正",
+    "expected_material_id": "memory",
+    "expected_section": "摘要、冲突与遗忘"
+  },
+  {
+    "id": "agent-mcp",
+    "course_id": "agent-engineering",
+    "query": "MCP 初始化 能力协商 协议版本 工具清单",
+    "expected_material_id": "mcp-integration",
+    "expected_section": "初始化与能力协商"
+  },
+  {
+    "id": "agent-handoff",
+    "course_id": "agent-engineering",
+    "query": "多智能体 handoff 移交契约 目标 证据 剩余预算",
+    "expected_material_id": "multi-agent",
+    "expected_section": "移交契约"
+  },
+  {
+    "id": "production-regression",
+    "course_id": "ai-app-production",
+    "query": "断言 AI 应用契约 断言 AI 应用契约 HTTP 流式契约测试",
+    "expected_material_id": "functional-testing",
+    "expected_section": "断言 AI 应用契约"
+  },
+  {
+    "id": "production-trace",
+    "course_id": "ai-app-production",
+    "query": "三类信号与关联 三类信号与关联 trace run_id 指标日志",
+    "expected_material_id": "observability",
+    "expected_section": "三类信号与关联"
+  },
+  {
+    "id": "production-prompt-injection",
+    "course_id": "ai-app-production",
+    "query": "间接提示注入 恶意资料 外部内容不可信数据",
+    "expected_material_id": "ai-security",
+    "expected_section": "提示注入不是普通字符串过滤问题"
+  },
+  {
+    "id": "production-least-privilege",
+    "course_id": "ai-app-production",
+    "query": "最小权限 工具白名单 高风险操作 人工确认",
+    "expected_material_id": "ai-security",
+    "expected_section": "身份、授权与最小权限"
+  },
+  {
+    "id": "production-container-health",
+    "course_id": "ai-app-production",
+    "query": "健康检查与生命周期 Docker 容器 readiness 就绪探针",
+    "expected_material_id": "deployment",
+    "expected_section": "健康检查与生命周期"
+  }
+]

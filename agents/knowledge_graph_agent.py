@@ -180,6 +180,8 @@ class KnowledgeGraphAgent:
 
 我的当前水平：{current_level}
 
+当前水平中列出的“已具备”能力属于先修背景，不得再次生成为知识节点。
+
 我的目标水平：{target_level}
 
 请为我生成个性化的知识星图。"""
@@ -300,6 +302,7 @@ class KnowledgeGraphAgent:
         current_mastery: float = 0.0,
         target_mastery: float = 0.8,
         user_note: str = "",
+        course_context: str = "",
     ) -> Dict[str, Any]:
         """
         在已有图谱基础上扩展新节点
@@ -313,6 +316,7 @@ class KnowledgeGraphAgent:
             current_mastery: 用户对该节点的当前掌握度
             target_mastery: 期望掌握度
             user_note: 用户备注
+            course_context: 当前课程检索得到的教材证据
 
         Returns:
             扩展结果字典（包含 new_nodes 和 new_links）
@@ -332,6 +336,13 @@ class KnowledgeGraphAgent:
 - 用户备注：{user_note if user_note else "无"}
 
 请分析已有图谱，将这个新节点自然融入其中。如果新节点与已有节点之间存在知识跨度，请生成适当的中间过渡节点来桥接。"""
+
+        if course_context:
+            prompt += (
+                "\n\n【当前课程教材证据】\n"
+                f"{course_context}\n"
+                "优先依据以上证据确定节点边界和前置关系，不得引用其他课程内容。"
+            )
 
         logger.info(f"正在扩展图谱，添加节点 '{new_node_name}'...")
 

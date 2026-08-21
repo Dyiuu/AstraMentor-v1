@@ -8,7 +8,7 @@ AstraMentor API 客户端
 import os
 import json
 import logging
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, Dict, Iterator, List
 
 from config import get_config
 from utils.web_research import (
@@ -67,6 +67,13 @@ class APIClient:
         from openai import OpenAI
 
         base_url = config.api.api_endpoint.rstrip("/")
+        # OpenAI SDK appends /chat/completions itself. Accept the common user
+        # mistake of pasting the full completion URL without producing a
+        # duplicated .../chat/completions/chat/completions request.
+        suffix = "/chat/completions"
+        if base_url.lower().endswith(suffix):
+            base_url = base_url[: -len(suffix)]
+            logger.warning("ASTRA_API_ENDPOINT 已自动规范化为 API 根地址: %s", base_url)
         self.client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -84,10 +91,15 @@ class APIClient:
         system_instruction: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
+        thinking: bool = False,
     ) -> str:
         if self.provider == "gemini":
-            return self._generate_gemini(prompt, image, system_instruction, temperature)
-        return self._generate_zhipu(prompt, image, system_instruction, temperature, max_tokens)
+            return self._generate_gemini(
+                prompt, image, system_instruction, temperature, max_tokens, thinking
+            )
+        return self._generate_zhipu(
+            prompt, image, system_instruction, temperature, max_tokens, thinking
+        )
 
     def _generate_gemini(
         self,
@@ -95,11 +107,23 @@ class APIClient:
         image: Optional[str],
         system_instruction: Optional[str],
         temperature: float,
+        max_tokens: Optional[int] = None,
+        thinking: bool = False,
     ) -> str:
         from google.genai import types
 
         try:
-            cfg = types.GenerateContentConfig(temperature=temperature)
+            config_kwargs: Dict[str, Any] = {"temperature": temperature}
+            if max_tokens:
+                config_kwargs["max_output_tokens"] = max_tokens
+            if thinking and hasattr(types, "ThinkingConfig"):
+                try:
+                    config_kwargs["thinking_config"] = types.ThinkingConfig(
+                        include_thoughts=True
+                    )
+                except TypeError:
+                    logger.warning("当前 Gemini SDK 不支持 include_thoughts，已关闭 Thinking")
+            cfg = types.GenerateContentConfig(**config_kwargs)
             if system_instruction:
                 cfg.system_instruction = system_instruction
 
@@ -146,6 +170,7 @@ class APIClient:
         system_instruction: Optional[str],
         temperature: float,
         max_tokens: Optional[int] = None,
+        thinking: bool = False,
     ) -> str:
         """通过 OpenAI 兼容接口调用智谱 GLM"""
         try:
@@ -174,18 +199,198 @@ class APIClient:
                 "messages": messages,
                 "temperature": temperature,
             }
-            # NOTE: GLM-5 是推理模型，max_tokens 预算同时包含思考和输出 token。
-            # 上层传入的较小值（如 2500）会导致模型思考耗尽 token 后无法产出内容。
-            # 因此忽略过小的 max_tokens，让 API 使用默认上限。
-            if max_tokens and max_tokens > 4096:
+            if max_tokens:
                 kwargs["max_tokens"] = max_tokens
+            if thinking:
+                kwargs["extra_body"] = {"reasoning": {"enabled": True}}
 
-            resp = self.client.chat.completions.create(**kwargs)
+            try:
+                resp = self.client.chat.completions.create(**kwargs)
+            except Exception:
+                if not thinking:
+                    raise
+                logger.warning("当前兼容端点拒绝 Thinking 参数，已按普通模式重试")
+                kwargs.pop("extra_body", None)
+                resp = self.client.chat.completions.create(**kwargs)
             return self._extract_zhipu_content(resp)
 
         except Exception as e:
             logger.error(f"内容生成失败 (GLM): {e}")
             raise
+
+    # ─────────────────────────────────────────────
+    # 公共接口：文本流式生成
+    # ─────────────────────────────────────────────
+
+    def stream_generate(
+        self,
+        prompt: str,
+        image: Optional[str] = None,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        thinking: bool = False,
+    ) -> Iterator[Dict[str, Any]]:
+        """Yield provider-neutral reasoning/content delta dictionaries."""
+        if self.provider == "gemini":
+            yield from self._stream_gemini(
+                prompt=prompt,
+                image=image,
+                system_instruction=system_instruction,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                thinking=thinking,
+            )
+            return
+        yield from self._stream_openai_compatible(
+            prompt=prompt,
+            image=image,
+            system_instruction=system_instruction,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking=thinking,
+        )
+
+    def _stream_gemini(
+        self,
+        prompt: str,
+        image: Optional[str],
+        system_instruction: Optional[str],
+        temperature: float,
+        max_tokens: Optional[int],
+        thinking: bool,
+    ) -> Iterator[Dict[str, Any]]:
+        from google.genai import types
+
+        config_kwargs: Dict[str, Any] = {"temperature": temperature}
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
+        if max_tokens:
+            config_kwargs["max_output_tokens"] = max_tokens
+
+        thinking_enabled = False
+        if thinking and hasattr(types, "ThinkingConfig"):
+            try:
+                config_kwargs["thinking_config"] = types.ThinkingConfig(
+                    include_thoughts=True
+                )
+                thinking_enabled = True
+            except TypeError:
+                pass
+        if thinking and not thinking_enabled:
+            yield {
+                "type": "warning",
+                "message": "当前 Gemini SDK/模型不支持展示思考过程，已使用普通模式",
+            }
+
+        contents: Any = [prompt]
+        if image:
+            import base64
+
+            mime_type = "image/jpeg"
+            image_data = image
+            if "base64," in image:
+                header, image_data = image.split("base64,", 1)
+                if "image/" in header:
+                    mime_type = header.split(";", 1)[0].split(":", 1)[1]
+            contents = [
+                types.Part(text=prompt),
+                types.Part(
+                    inline_data=types.Blob(
+                        mime_type=mime_type,
+                        data=base64.b64decode(image_data),
+                    )
+                ),
+            ]
+
+        stream = self.client.models.generate_content_stream(
+            model=self.model_name,
+            contents=contents,
+            config=types.GenerateContentConfig(**config_kwargs),
+        )
+        for chunk in stream:
+            emitted_part = False
+            for candidate in getattr(chunk, "candidates", []) or []:
+                content = getattr(candidate, "content", None)
+                for part in getattr(content, "parts", []) or []:
+                    text = getattr(part, "text", None)
+                    if not text:
+                        continue
+                    emitted_part = True
+                    yield {
+                        "type": "reasoning_delta" if getattr(part, "thought", False) else "content_delta",
+                        "text": text,
+                    }
+            if not emitted_part:
+                text = getattr(chunk, "text", None)
+                if text:
+                    yield {"type": "content_delta", "text": text}
+
+    def _stream_openai_compatible(
+        self,
+        prompt: str,
+        image: Optional[str],
+        system_instruction: Optional[str],
+        temperature: float,
+        max_tokens: Optional[int],
+        thinking: bool,
+    ) -> Iterator[Dict[str, Any]]:
+        messages: List[Dict[str, Any]] = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        if image:
+            image_url = image if image.startswith("data:") else f"data:image/jpeg;base64,{image}"
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ],
+                }
+            )
+        else:
+            messages.append({"role": "user", "content": prompt})
+
+        kwargs: Dict[str, Any] = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        if thinking:
+            kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+
+        try:
+            stream = self.client.chat.completions.create(**kwargs)
+        except Exception:
+            if not thinking:
+                raise
+            kwargs.pop("extra_body", None)
+            yield {
+                "type": "warning",
+                "message": "当前模型不支持 Thinking，已自动切换为普通回答",
+            }
+            stream = self.client.chat.completions.create(**kwargs)
+
+        for chunk in stream:
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            if delta is None:
+                continue
+            reasoning = (
+                getattr(delta, "reasoning_content", None)
+                or getattr(delta, "reasoning", None)
+            )
+            if reasoning:
+                yield {"type": "reasoning_delta", "text": str(reasoning)}
+            content = getattr(delta, "content", None)
+            if content:
+                yield {"type": "content_delta", "text": str(content)}
 
     # ─────────────────────────────────────────────
     # 公共接口 2：联网搜索 + 生成

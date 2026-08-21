@@ -41,6 +41,127 @@ class TeacherAgent:
         """
         self.api_client = api_client or APIClient()
         logger.info("Teacher Agent 初始化完成")
+
+    def prepare_teach_prompt(
+        self,
+        knowledge_point: KnowledgePoint,
+        plan_step: Optional[Dict[str, str]] = None,
+        context: str = "",
+        project_context: str = "",
+    ) -> Dict[str, Any]:
+        """Build a lesson request that can be used by streaming transports."""
+        system_instruction = get_teaching_prompt(
+            stage=knowledge_point.get_teaching_stage(),
+            topic=knowledge_point.name,
+            current_score=knowledge_point.actual_mastery,
+        )
+        if project_context:
+            system_instruction += f"\n\n{project_context}"
+        prompt = f"请讲解知识点：{knowledge_point.name}"
+        if knowledge_point.note:
+            prompt += f"\n\n用户备注：{knowledge_point.note}"
+        if context:
+            prompt += f"\n\n补充说明：{context}"
+        if "【课程教材证据】" in context:
+            system_instruction += (
+                "\n\n【课程边界】优先依据给定教材证据讲解。"
+                "教材之外的内容必须明确标注为“扩展知识”。"
+            )
+        if plan_step:
+            prompt += f"""
+
+【当前教学步骤】
+步骤名称：{plan_step.get('name', '')}
+教学内容要求：{plan_step.get('content', '')}
+
+请严格按照上述步骤要求进行讲解，只讲本步骤的内容，不要超前。
+【重要】不要在讲解中包含任何练习题、填空题、改错题或测验，出题由专门的评估模块处理。"""
+        return {
+            "prompt": prompt,
+            "system_instruction": system_instruction,
+            "temperature": 0.4,
+            "max_tokens": 2500,
+        }
+
+    def prepare_reteach_prompt(
+        self,
+        knowledge_point: KnowledgePoint,
+        plan_step: Optional[Dict[str, str]] = None,
+        error_analysis: str = "",
+        project_context: str = "",
+        context: str = "",
+    ) -> Dict[str, Any]:
+        """Build a remediation request for the current lesson step."""
+        system_instruction = get_teaching_prompt(
+            stage=knowledge_point.get_teaching_stage(),
+            topic=knowledge_point.name,
+            current_score=knowledge_point.actual_mastery,
+        )
+        if project_context:
+            system_instruction += f"\n\n{project_context}"
+        prompt = f"请针对学习者在以下知识点上的薄弱环节重新讲解：\n\n【知识点】{knowledge_point.name}"
+        if plan_step:
+            prompt += (
+                f"\n\n【当前教学步骤】\n步骤名称：{plan_step.get('name', '')}"
+                f"\n教学内容：{plan_step.get('content', '')}"
+            )
+        if error_analysis:
+            prompt += f"\n\n【学习者的薄弱环节】\n{error_analysis}\n\n请重点针对以上薄弱环节换一种角度讲解。"
+        if context:
+            prompt += f"\n\n{context}\n\n请优先使用教材证据重新讲解。"
+        return {
+            "prompt": prompt,
+            "system_instruction": system_instruction,
+            "temperature": 0.5,
+            "max_tokens": 2500,
+        }
+
+    def prepare_discuss_prompt(
+        self,
+        knowledge_point: KnowledgePoint,
+        teaching_content: str,
+        question: str,
+        discussion_history: list = None,
+        project_context: str = "",
+    ) -> Dict[str, Any]:
+        """Build a free-chat request without performing the model call."""
+        system_instruction = get_teaching_prompt(
+            stage=knowledge_point.get_teaching_stage(),
+            topic=knowledge_point.name,
+            current_score=knowledge_point.actual_mastery,
+        )
+        if project_context:
+            system_instruction += f"\n\n{project_context}"
+        if "【课程教材证据】" in teaching_content:
+            system_instruction += (
+                "\n\n【课程边界】优先依据给定教材证据回答；"
+                "教材外补充必须标注“扩展知识”。"
+            )
+        prompt = f"基于以下教学内容，回答用户的疑问：\n【教学内容】\n{teaching_content}\n"
+        if discussion_history:
+            history_lines = []
+            for item in discussion_history[-4:]:
+                if isinstance(item, (list, tuple)):
+                    history_lines.append(f"用户：{item[0]}\nAstraMentor：{item[1]}")
+                elif item.get("role") in {"user", "assistant"}:
+                    label = "用户" if item.get("role") == "user" else "AstraMentor"
+                    history_lines.append(f"{label}：{item.get('content', '')}")
+                else:
+                    history_lines.append(
+                        f"用户：{item.get('question', item.get('user', ''))}\n"
+                        f"AstraMentor：{item.get('answer', item.get('assistant', ''))}"
+                    )
+            history_text = "\n".join(history_lines)
+            prompt += f"\n【讨论历史】\n{history_text}\n"
+        prompt += (
+            f"\n【用户当前问题】{question}\n"
+            "请耐心、准确地回答并帮助用户理解当前知识点。"
+        )
+        return {
+            "prompt": prompt,
+            "system_instruction": system_instruction,
+            "temperature": 0.5,
+        }
     
     def generate_teaching_plan(
         self,
@@ -121,38 +242,21 @@ class TeacherAgent:
             包含 content 和 sources 的字典
         """
         stage = knowledge_point.get_teaching_stage()
-        
-        system_instruction = get_teaching_prompt(
-            stage=stage,
-            topic=knowledge_point.name,
-            current_score=knowledge_point.actual_mastery
+        is_course_grounded = "【课程教材证据】" in context
+        prepared = self.prepare_teach_prompt(
+            knowledge_point,
+            plan_step=plan_step,
+            context=context,
+            project_context=project_context,
         )
-        # NOTE: 项目模式下将项目上下文追加到系统提示词
-        if project_context:
-            system_instruction += f"\n\n{project_context}"
-        
-        user_prompt = f"请讲解知识点：{knowledge_point.name}"
-        if knowledge_point.note:
-            user_prompt += f"\n\n用户备注：{knowledge_point.note}"
-        if context:
-            user_prompt += f"\n\n补充说明：{context}"
-
-        # NOTE: 当存在教学计划步骤时，将步骤要求注入 prompt 实现按步教学
-        if plan_step:
-            user_prompt += f"""\n\n【当前教学步骤】
-步骤名称：{plan_step.get('name', '')}
-教学内容要求：{plan_step.get('content', '')}
-
-请严格按照上述步骤要求进行讲解，只讲本步骤的内容，不要超前。
-【重要】不要在讲解中包含任何练习题、填空题、改错题或测验，出题由专门的评估模块处理。"""
         
         # NOTE: 根据配置决定是否启用联网搜索
         config = get_config()
-        if config.api.web_search_enabled:
+        if config.api.web_search_enabled and not is_course_grounded:
             # 启用 Google Search Grounding，获取最新资料
-            search_instruction = system_instruction + "\n\n【重要】请充分利用联网搜索到的最新资料来丰富讲解内容，确保信息准确、时效。"
+            search_instruction = prepared["system_instruction"] + "\n\n【重要】请充分利用联网搜索到的最新资料来丰富讲解内容，确保信息准确、时效。"
             grounded_response = self.api_client.generate_with_search(
-                prompt=user_prompt,
+                prompt=prepared["prompt"],
                 system_instruction=search_instruction,
                 temperature=0.4,
                 max_tokens=2500,
@@ -173,10 +277,7 @@ class TeacherAgent:
         else:
             # 回退到原有纯文本行为
             teaching_content = self.api_client.generate(
-                prompt=user_prompt,
-                system_instruction=system_instruction,
-                temperature=0.4,
-                max_tokens=2500,
+                **prepared,
             )
             
             logger.info(
@@ -186,7 +287,10 @@ class TeacherAgent:
     
     def generate_question(
         self,
-        knowledge_point: KnowledgePoint
+        knowledge_point: KnowledgePoint,
+        plan_step: Optional[Dict[str, str]] = None,
+        last_teaching_content: str = "",
+        context: str = "",
     ) -> str:
         """
         生成验证问题
@@ -206,10 +310,29 @@ class TeacherAgent:
             stage=stage,
             current_score=knowledge_point.actual_mastery
         )
+        if plan_step:
+            prompt += f"""
+
+【本次测验唯一范围】
+步骤名称：{plan_step.get('name', '')}
+步骤目标：{plan_step.get('content', '')}
+
+【刚刚完成的教学内容】
+{last_teaching_content}
+
+必须只考查上述当前步骤中已经实际讲过的内容。禁止考查后续步骤、其他知识点，
+也禁止仅因教材检索结果中出现某个概念就把未讲内容作为答案要求。
+"""
+        if context:
+            prompt += (
+                f"\n\n【课程教材参考】\n{context}\n\n"
+                "教材只能用于核对事实，不得扩大上面限定的测验范围。"
+            )
         
         system_instruction = """你是AstraMentor的提问助手。
 请根据学习者的当前水平，生成一个适合的验证问题。
 问题应该能够准确评估学习者对知识点的掌握程度。
+问题必须严格匹配提示词中的“本次测验唯一范围”和刚刚完成的教学内容。
 直接输出问题内容，不要有多余的前缀或解释。
 
 【格式要求】
@@ -242,6 +365,7 @@ D) 第四个选项
         plan_step: Optional[Dict[str, str]] = None,
         error_analysis: str = "",
         project_context: str = "",
+        context: str = "",
     ) -> Dict[str, Any]:
         """
         针对用户的错误，重新讲解当前步骤的薄弱环节
@@ -254,38 +378,14 @@ D) 第四个选项
         Returns:
             包含 content 和 sources 的字典
         """
-        stage = knowledge_point.get_teaching_stage()
-
-        system_instruction = get_teaching_prompt(
-            stage=stage,
-            topic=knowledge_point.name,
-            current_score=knowledge_point.actual_mastery
+        prepared = self.prepare_reteach_prompt(
+            knowledge_point,
+            plan_step=plan_step,
+            error_analysis=error_analysis,
+            project_context=project_context,
+            context=context,
         )
-        # NOTE: 项目模式下将项目上下文追加到系统提示词
-        if project_context:
-            system_instruction += f"\n\n{project_context}"
-
-        user_prompt = f"""请针对学习者在以下知识点上的薄弱环节重新讲解：
-
-【知识点】{knowledge_point.name}"""
-
-        if plan_step:
-            user_prompt += f"""\n\n【当前教学步骤】
-步骤名称：{plan_step.get('name', '')}
-教学内容：{plan_step.get('content', '')}"""
-
-        if error_analysis:
-            user_prompt += f"""\n\n【学习者的薄弱环节】
-{error_analysis}
-
-请重点针对以上薄弱环节进行补充讲解，用不同的角度或例子帮助学习者理解。"""
-
-        teaching_content = self.api_client.generate(
-            prompt=user_prompt,
-            system_instruction=system_instruction,
-            temperature=0.5,
-            max_tokens=2500,
-        )
+        teaching_content = self.api_client.generate(**prepared)
 
         logger.info(f"已完成知识点 '{knowledge_point.name}' 的错误重讲")
         return {"content": teaching_content, "sources": []}
@@ -363,39 +463,22 @@ D) 第四个选项
         Returns:
             包含 content 和 sources 的字典
         """
-        stage = knowledge_point.get_teaching_stage()
-        
-        system_instruction = get_teaching_prompt(
-            stage=stage,
-            topic=knowledge_point.name,
-            current_score=knowledge_point.actual_mastery
+        is_course_grounded = "【课程教材证据】" in teaching_content
+        prepared = self.prepare_discuss_prompt(
+            knowledge_point,
+            teaching_content=teaching_content,
+            question=question,
+            discussion_history=discussion_history,
+            project_context=project_context,
         )
-        # NOTE: 项目模式下将项目上下文追加到系统提示词
-        if project_context:
-            system_instruction += f"\n\n{project_context}"
-        
-        prompt = """基于以下教学内容，回答用户的疑问：
-            【教学内容】
-            """ + teaching_content + "\n\n" 
-
-        if discussion_history:
-            history_text = "\n".join(
-                [f"用户：{q}\nAstraMentor：{a}" for q, a in discussion_history[-2:]]
-            )
-            prompt += f"\n\n【讨论历史】\n{history_text}"
-            
-        prompt += f"""这是用户当前的【问题】{question} 
-        请允许用户提出疑问并进行讨论，帮助用户更好地理解该知识点。
-        保持耐心和鼓励的语气，确保用户感到被支持和理解。
-        """ 
 
         # NOTE: 讨论环节同样支持联网搜索，方便解答最新技术问题
         config = get_config()
-        if config.api.web_search_enabled and not image:
+        if config.api.web_search_enabled and not image and not is_course_grounded:
             # NOTE: 带图片时无法同时使用 google_search，回退到普通模式
             grounded_response = self.api_client.generate_with_search(
-                prompt=prompt,
-                system_instruction=system_instruction,
+                prompt=prepared["prompt"],
+                system_instruction=prepared["system_instruction"],
                 temperature=0.5,
                 max_tokens=1500,
                 search_query=f"{knowledge_point.name} {question[:50]}",
@@ -409,10 +492,10 @@ D) 第四个选项
             }
         else:
             answer = self.api_client.generate(
-                prompt=prompt,
+                prompt=prepared["prompt"],
                 image=image,
-                system_instruction=system_instruction,
-                temperature=0.5,
+                system_instruction=prepared["system_instruction"],
+                temperature=prepared["temperature"],
                 max_tokens=1500,
             )
             return {"content": answer, "sources": []}

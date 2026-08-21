@@ -1,0 +1,322 @@
+[
+  {
+    "viewport": "1440x900",
+    "theme": "night",
+    "detailsExpanded": false,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": "1440x900-night.png",
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 3,
+    "minimumContrast": 6.663241769259188,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "1440x900",
+    "theme": "eye-care",
+    "detailsExpanded": false,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": null,
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 3,
+    "minimumContrast": 5.733681398654174,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "1024x768",
+    "theme": "night",
+    "detailsExpanded": true,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": "1024x768-night-expanded.png",
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 2,
+    "minimumContrast": 6.663241769259188,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "1024x768",
+    "theme": "eye-care",
+    "detailsExpanded": true,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": null,
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 2,
+    "minimumContrast": 5.733681398654174,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "900x768",
+    "theme": "night",
+    "detailsExpanded": false,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": null,
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 2,
+    "minimumContrast": 6.663241769259188,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "900x768",
+    "theme": "eye-care",
+    "detailsExpanded": false,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": "900x768-eye-care.png",
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 2,
+    "minimumContrast": 5.733681398654174,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "620x900",
+    "theme": "night",
+    "detailsExpanded": true,
+    "recovery": true,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": "620x900-night-failed-recovery.png",
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 1,
+    "minimumContrast": 6.663241769259188,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "620x900",
+    "theme": "eye-care",
+    "detailsExpanded": true,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": null,
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 1,
+    "minimumContrast": 5.733681398654174,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "390x844",
+    "theme": "night",
+    "detailsExpanded": true,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": null,
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 1,
+    "minimumContrast": 6.663241769259188,
+    "contrastFailures": [],
+    "passed": true
+  },
+  {
+    "viewport": "390x844",
+    "theme": "eye-care",
+    "detailsExpanded": true,
+    "recovery": false,
+    "states": [
+      "ready",
+      "building",
+      "failed"
+    ],
+    "screenshot": "390x844-eye-care-expanded.png",
+    "pageOverflow": 0,
+    "cardOverflows": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "actionOutsideCard": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "overlaps": [],
+    "columns": 1,
+    "minimumContrast": 5.733681398654174,
+    "contrastFailures": [],
+    "passed": true
+  }
+]

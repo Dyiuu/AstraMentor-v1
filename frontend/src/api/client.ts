@@ -1,14 +1,20 @@
 import axios from 'axios';
-import type { GraphData, LearnerState, EvaluationResult, GroundingSource } from '../types';
+import type { ChatMessage, GraphData, LearnerState, EvaluationResult, GroundingSource, TeachingResponse, CourseCitation, KnowledgeScope, SessionSnapshot, SessionSummary } from '../types';
+import { toApiRequestError } from './errors';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+export const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
-const client = axios.create({
+export const client = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
 });
+
+client.interceptors.response.use(
+    (response) => response,
+    (error: unknown) => Promise.reject(toApiRequestError(error)),
+);
 
 export const api = {
     getLearnerState: async () => {
@@ -16,19 +22,20 @@ export const api = {
         return response.data;
     },
     
-    generateGraph: async (topic: string, goal: string, currentLevel: string, targetLevel: string, complexity: number = 2) => {
+    generateGraph: async (topic: string, goal: string, currentLevel: string, targetLevel: string, complexity: number = 2, courseId?: string) => {
         const response = await client.post<GraphData>('/graph/generate', {
             topic,
             learning_goal: goal,
             current_level: currentLevel,
             target_level: targetLevel,
             complexity,
+            course_id: courseId,
         });
         return response.data;
     },
 
-    startLearning: async (topic: string, nodeName: string, description: string, userNote: string, current: number, target: number, projectDescription: string = '') => {
-        const response = await client.post<{ content: string }>('/learning/start', {
+    startLearning: async (topic: string, nodeName: string, description: string, userNote: string, current: number, target: number, projectDescription: string = '', courseId?: string) => {
+        const response = await client.post<TeachingResponse>('/learning/start', {
             topic,
             node_name: nodeName,
             node_description: description,
@@ -36,79 +43,88 @@ export const api = {
             current_mastery: current,
             target_mastery: target,
             project_description: projectDescription,
+            course_id: courseId,
         });
         return response.data;
     },
 
-    startLesson: async (topic: string, nodeName: string) => {
-        const response = await client.post<{ content: string; sources?: GroundingSource[]; current_step?: number; total_steps?: number; is_plan_completed?: boolean }>('/learning/lesson', { 
+    startLesson: async (topic: string, nodeName: string, courseId?: string) => {
+        const response = await client.post<TeachingResponse>('/learning/lesson', { 
             topic,
             node_name: nodeName,
             node_description: "",
             user_note: "",
             current_mastery: 0,
-            target_mastery: 0.8
+            target_mastery: 0.8,
+            course_id: courseId,
         });
         return response.data;
     },
 
     /** 推进到下一个教学步骤并自动讲解 */
-    nextStep: async (topic: string, nodeName: string) => {
-        const response = await client.post<{ content: string; sources?: GroundingSource[]; current_step?: number; total_steps?: number; is_plan_completed?: boolean }>('/learning/next-step', {
+    nextStep: async (topic: string, nodeName: string, courseId?: string) => {
+        const response = await client.post<TeachingResponse>('/learning/next-step', {
             topic,
             node_name: nodeName,
+            course_id: courseId,
         });
         return response.data;
     },
 
     /** 根据错误分析重新讲解当前步骤 */
-    reteach: async (topic: string, nodeName: string, errorAnalysis: string = '', projectDescription: string = '') => {
-        const response = await client.post<{ content: string; sources?: GroundingSource[] }>('/learning/reteach', {
+    reteach: async (topic: string, nodeName: string, errorAnalysis: string = '', projectDescription: string = '', courseId?: string) => {
+        const response = await client.post<TeachingResponse>('/learning/reteach', {
             topic,
             node_name: nodeName,
             error_analysis: errorAnalysis,
             project_description: projectDescription,
+            course_id: courseId,
         });
         return response.data;
     },
 
-    updateNode: async (topic: string, nodeName: string, userNote: string, current: number, target: number) => {
+    updateNode: async (topic: string, nodeName: string, userNote: string, current: number, target: number, courseId?: string) => {
         const response = await client.post<{ status: string }>('/learning/update', {
             topic,
             node_name: nodeName,
             user_note: userNote,
             current_mastery: current,
-            target_mastery: target
+            target_mastery: target,
+            course_id: courseId,
         });
         return response.data;
     },
 
-    chat: async (topic: string, nodeName: string, question: string, history: any[], image?: string, projectDescription: string = '') => {
-        const response = await client.post<{ response: string; sources?: GroundingSource[] }>('/learning/chat', {
+    chat: async (topic: string, nodeName: string, question: string, history: Pick<ChatMessage, 'role' | 'content'>[], image?: string, projectDescription: string = '', courseId?: string) => {
+        const response = await client.post<{ response: string; sources?: GroundingSource[]; citations?: CourseCitation[]; knowledge_scope?: KnowledgeScope }>('/learning/chat', {
             topic,
             node_name: nodeName,
             question,
             image,
             history,
             project_description: projectDescription,
+            course_id: courseId,
         });
         return response.data;
     },
 
-    generateQuestion: async (topic: string, nodeName: string) => {
-        const response = await client.post<{ question: string }>('/learning/question', {
+    generateQuestion: async (topic: string, nodeName: string, courseId?: string) => {
+        const response = await client.post<{ question: string; question_id: string; citations?: CourseCitation[]; knowledge_scope?: KnowledgeScope }>('/learning/question', {
             topic,
-            node_name: nodeName
+            node_name: nodeName,
+            course_id: courseId,
         });
         return response.data;
     },
 
-    evaluateAnswer: async (topic: string, nodeName: string, question: string, answer: string) => {
+    evaluateAnswer: async (topic: string, nodeName: string, question: string, answer: string, courseId?: string, questionId?: string) => {
         const response = await client.post<EvaluationResult>('/learning/evaluate', {
             topic,
             node_name: nodeName,
             question,
-            answer
+            answer,
+            course_id: courseId,
+            question_id: questionId,
         });
         return response.data;
     },
@@ -122,18 +138,19 @@ export const api = {
     },
 
     /** 将修改后的图谱数据保存到磁盘 JSON 文件 */
-    saveGraph: async (topic: string, graphData: any) => {
+    saveGraph: async (topic: string, graphData: GraphData, courseId?: string) => {
         const response = await client.post<{ status: string }>('/graph/save', {
             topic,
-            graph_data: graphData
+            graph_data: graphData,
+            course_id: courseId,
         });
         return response.data;
     },
 
     /** 删除星图对应的图谱文件和学习状态文件 */
-    deleteGraph: async (topic: string) => {
+    deleteGraph: async (topic: string, courseId?: string) => {
         const response = await client.delete<{ status: string }>('/graph/delete', {
-            params: { topic }
+            params: { topic, course_id: courseId }
         });
         return response.data;
     },
@@ -148,7 +165,8 @@ export const api = {
         currentMastery: number,
         targetMastery: number,
         userNote: string,
-        existingGraph: GraphData
+        existingGraph: GraphData,
+        courseId?: string,
     ) => {
         const response = await client.post<GraphData>('/graph/expand', {
             topic,
@@ -156,7 +174,8 @@ export const api = {
             current_mastery: currentMastery,
             target_mastery: targetMastery,
             user_note: userNote,
-            existing_graph: existingGraph
+            existing_graph: existingGraph,
+            course_id: courseId,
         });
         return response.data;
     },
@@ -201,7 +220,7 @@ export const api = {
 
     /** 文档模式：开始学习（生成教学计划） */
     docStartLearning: async (docId: string, nodeName: string, description: string = '', userNote: string = '', current: number = 0, target: number = 0.8) => {
-        const response = await client.post<{ content: string }>('/doc/learning/start', {
+        const response = await client.post<TeachingResponse>('/doc/learning/start', {
             doc_id: docId,
             node_name: nodeName,
             node_description: description,
@@ -214,7 +233,7 @@ export const api = {
 
     /** 文档模式：开始讲课 */
     docStartLesson: async (docId: string, nodeName: string) => {
-        const response = await client.post<{ content: string; sources?: GroundingSource[]; current_step?: number; total_steps?: number; is_plan_completed?: boolean }>('/doc/learning/lesson', {
+        const response = await client.post<TeachingResponse>('/doc/learning/lesson', {
             doc_id: docId,
             node_name: nodeName,
         });
@@ -223,7 +242,7 @@ export const api = {
 
     /** 文档模式：推进到下一步 */
     docNextStep: async (docId: string, nodeName: string) => {
-        const response = await client.post<{ content: string; sources?: GroundingSource[]; current_step?: number; total_steps?: number; is_plan_completed?: boolean }>('/doc/learning/next-step', {
+        const response = await client.post<TeachingResponse>('/doc/learning/next-step', {
             doc_id: docId,
             node_name: nodeName,
         });
@@ -232,7 +251,7 @@ export const api = {
 
     /** 文档模式：重新讲解 */
     docReteach: async (docId: string, nodeName: string, errorAnalysis: string = '') => {
-        const response = await client.post<{ content: string; sources?: GroundingSource[] }>('/doc/learning/reteach', {
+        const response = await client.post<TeachingResponse>('/doc/learning/reteach', {
             doc_id: docId,
             node_name: nodeName,
             error_analysis: errorAnalysis,
@@ -242,7 +261,7 @@ export const api = {
 
     /** 文档模式：基于文档出题 */
     docGenerateQuestion: async (docId: string, nodeName: string) => {
-        const response = await client.post<{ question: string }>('/doc/learning/question', {
+        const response = await client.post<{ question: string; question_id: string; citations?: CourseCitation[]; knowledge_scope?: KnowledgeScope }>('/doc/learning/question', {
             doc_id: docId,
             node_name: nodeName,
         });
@@ -250,19 +269,20 @@ export const api = {
     },
 
     /** 文档模式：基于文档评估 */
-    docEvaluateAnswer: async (docId: string, nodeName: string, question: string, answer: string) => {
+    docEvaluateAnswer: async (docId: string, nodeName: string, question: string, answer: string, questionId?: string) => {
         const response = await client.post<EvaluationResult>('/doc/learning/evaluate', {
             doc_id: docId,
             node_name: nodeName,
             question,
             answer,
+            question_id: questionId,
         });
         return response.data;
     },
 
     /** 文档模式：基于文档讨论 */
-    docChat: async (docId: string, nodeName: string, question: string, history: any[], image?: string) => {
-        const response = await client.post<{ response: string; sources?: GroundingSource[] }>('/doc/learning/chat', {
+    docChat: async (docId: string, nodeName: string, question: string, history: Pick<ChatMessage, 'role' | 'content'>[], image?: string) => {
+        const response = await client.post<{ response: string; sources?: GroundingSource[]; citations?: CourseCitation[]; knowledge_scope?: KnowledgeScope }>('/doc/learning/chat', {
             doc_id: docId,
             node_name: nodeName,
             question,
@@ -278,5 +298,24 @@ export const api = {
             params: { doc_id: docId },
         });
         return response.data;
+    },
+
+    listSessions: async (limit: number = 50) => {
+        const response = await client.get<{ sessions: SessionSummary[] }>('/sessions', { params: { limit } });
+        return response.data.sessions;
+    },
+
+    getSession: async (sessionId: string) => {
+        const response = await client.get<SessionSnapshot>(`/sessions/${sessionId}`);
+        return response.data;
+    },
+
+    saveSession: async (snapshot: SessionSnapshot) => {
+        const response = await client.put<SessionSnapshot>(`/sessions/${snapshot.session_id}`, snapshot);
+        return response.data;
+    },
+
+    deleteSession: async (sessionId: string) => {
+        await client.delete(`/sessions/${sessionId}`);
     },
 };

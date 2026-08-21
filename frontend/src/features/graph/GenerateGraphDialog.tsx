@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -21,7 +21,7 @@ interface GenerateGraphDialogProps {
   isGenerating: boolean;
   onGenerate: () => void;
   /** 文档模式：上传并生成 */
-  onUploadAndGenerate?: (file: File, complexity: number, level: string, goal: string) => void;
+  onUploadAndGenerate?: (file: File, complexity: number) => void;
   /** 文档上传中 */
   isDocUploading?: boolean;
   /** 项目模式：项目描述输入 */
@@ -63,14 +63,6 @@ export function GenerateGraphDialog({
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // NOTE: 每次对话框打开时重置文件选择和拖拽状态
-  useEffect(() => {
-    if (open) {
-      setSelectedFile(null);
-      setDragOver(false);
-    }
-  }, [open]);
-
   const isProcessing = isGenerating || isDocUploading;
 
   const complexitySteps = [
@@ -95,7 +87,7 @@ export function GenerateGraphDialog({
     if (mode === 'topic') {
       onGenerate();
     } else if (mode === 'doc' && selectedFile && onUploadAndGenerate) {
-      onUploadAndGenerate(selectedFile, complexity, inputLevel, inputGoal);
+      onUploadAndGenerate(selectedFile, complexity);
     } else if (mode === 'project' && onGenerateProject) {
       onGenerateProject();
     }

@@ -1,7 +1,7 @@
 
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Button } from '../../components/ui/button';
-import { MessageSquare, Calendar, ChevronRight, Trash2 } from 'lucide-react';
+import { MessageSquare, Calendar, ChevronRight, Trash2, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN, enUS } from 'date-fns/locale';
@@ -30,7 +30,7 @@ export function HistorySidebar({
     currentSessionId, 
     onSelectSession, 
     onDeleteSession,
-    onClose: _onClose 
+    onClose,
 }: HistorySidebarProps) {
     const { t, language } = useLanguage();
     if (!isOpen) return null;
@@ -42,6 +42,9 @@ export function HistorySidebar({
                     <MessageSquare className="w-4 h-4 text-blue-600" />
                     {t('app.history_sidebar')}
                 </h2>
+                <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('common.close')}>
+                    <X className="h-4 w-4" />
+                </Button>
             </div>
             
             <ScrollArea className="flex-1 pl-4 pr-5 py-4">

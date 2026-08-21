@@ -54,6 +54,33 @@ class KnowledgePoint:
     # step_scores[i] 对应 teaching_plan[i] 的最新测验分 (0.0-1.0)
     step_scores: list = field(default_factory=list)
 
+    # The following fields bind a quiz to the exact lesson step that produced it.
+    # They are persisted with learner state so a page refresh cannot silently
+    # switch the quiz to a different step.
+    plan_version: str = ""
+    last_teaching_content: str = ""
+    last_taught_step_index: Optional[int] = None
+    last_teaching_completed_at: Optional[str] = None
+    active_question_id: Optional[str] = None
+    active_question_text: str = ""
+    active_question_step_index: Optional[int] = None
+    active_question_plan_version: str = ""
+
+    def clear_quiz_context(self) -> None:
+        """Invalidate any quiz created for a previous lesson or plan."""
+        self.active_question_id = None
+        self.active_question_text = ""
+        self.active_question_step_index = None
+        self.active_question_plan_version = ""
+
+    def record_completed_teaching(self, content: str) -> None:
+        """Remember only a fully completed lesson as the quiz source."""
+        self.last_teaching_content = content.strip()
+        self.last_taught_step_index = self.current_step
+        self.last_teaching_completed_at = datetime.now().isoformat()
+        self.clear_quiz_context()
+        self.updated_at = datetime.now().isoformat()
+
     def record_step_score(self, step_index: int, score: float) -> None:
         """
         记录某步骤的测验分数（重考时覆盖旧分）
@@ -113,6 +140,7 @@ class KnowledgePoint:
     def advance_step(self) -> None:
         """推进到下一个教学步骤"""
         self.current_step += 1
+        self.clear_quiz_context()
         self.updated_at = datetime.now().isoformat()
 
     def is_plan_completed(self) -> bool:

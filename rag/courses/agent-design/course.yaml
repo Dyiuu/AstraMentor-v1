@@ -1,0 +1,16 @@
+{
+  "id": "agent-design",
+  "title": "智能体设计与应用开发基础",
+  "description": "面向职业教育的智能体设计、提示词、插件与工作流课程",
+  "locale": "zh-CN",
+  "version": "1.0",
+  "category": "人工智能应用",
+  "order": 10,
+  "materials": [
+    {
+      "id": "textbook",
+      "title": "智能体设计与应用开发基础",
+      "path": "materials/智能体设计与应用开发基础.md"
+    }
+  ]
+}

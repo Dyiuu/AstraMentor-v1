@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "course_id": "agent-engineering",
+  "course_version": "1.0",
+  "source_hashes": {
+    "materials/01-实现Agent执行循环.md": "2509f7414b76fac420c0c36ef25ceb826844a70b47626b4efbe4ff60d276711b",
+    "materials/02-开发可靠工具系统.md": "bfaba0b8c25ff84f67595d1513e6db9bad4ed35001730c7e6c01ae54073c96fd",
+    "materials/03-管理会话与记忆.md": "e2dfd22906c8288d7c5b7b97e9b238b1c8555d84434c882c5808ca6482156cf3",
+    "materials/04-编排复杂工作流.md": "9d893819eb63f80cf5d3d793eb251e868e67426c27a20e5a2e1813d189f00c67",
+    "materials/05-集成知识与外部服务.md": "c207227a57002d2483dfd0988ce2b85d9093ede1a80ea0da06543796b1ebcacf",
+    "materials/06-接入MCP.md": "4ece89f86355175bca139075175fb85373f8ac74af35aa6faccc559c731450a7",
+    "materials/07-构建多智能体系统.md": "ca253dd7fe86dd5df622b92a5bd5381f14d6fd15a5841eb291f2de5585912f35",
+    "materials/08-综合项目.md": "7546ad5a57ef3ada87dbfa3e85b3900d8f70b48d4b45bf22229e414179c0ef4e"
+  },
+  "artifact_hashes": {
+    "chunks.jsonl": "b25dde7dd65ce79ab78e902bc098b29437287626f104f73ad03e37794c07c2cc",
+    "bm25.json": "37729fb25b86cc3e36ff087b12bf8df920978ad2e66497ce5b63d3e66b64fa0e"
+  },
+  "chunking": {
+    "target_chars": 700,
+    "max_chars": 900,
+    "overlap_chars": 120
+  },
+  "chunk_count": 188,
+  "section_count": 180,
+  "embedding": null,
+  "built_at": "2026-08-20T15:59:12.624862+00:00"
+}

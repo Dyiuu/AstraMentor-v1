@@ -1,0 +1,36 @@
+{
+  "id": "rag-knowledge-engineering",
+  "title": "RAG 知识库工程",
+  "description": "面向 RAG 与知识库工程岗位的文档治理、切分、混合检索、依据生成与效果评测课程",
+  "locale": "zh-CN",
+  "version": "1.0",
+  "category": "人工智能应用",
+  "order": 30,
+  "hours": 32,
+  "level": "intermediate",
+  "track": "AI 应用工程",
+  "prerequisite_skills": [
+    "能够使用 Python 处理文本、文件和 JSON 数据",
+    "理解 HTTP API、异常处理和环境变量",
+    "具备大模型兼容接口调用与基本数据库使用经验"
+  ],
+  "recommended_courses": ["llm-app-development"],
+  "job_roles": ["RAG 工程师", "知识库工程师"],
+  "competencies": [
+    "建设可追溯的文档处理与切分流水线",
+    "实现关键词、向量、混合检索和重排序",
+    "交付带引用、可拒答并可量化评测的知识助手"
+  ],
+  "capstone": "建设一个带引用、可拒答、可评测的职业课程知识助手",
+  "tags": ["RAG", "知识库", "BM25", "向量检索", "混合检索", "评测"],
+  "materials": [
+    {"id": "requirements", "title": "分析知识库需求", "path": "materials/01-分析知识库需求.md"},
+    {"id": "document-pipeline", "title": "建设文档处理流水线", "path": "materials/02-建设文档处理流水线.md"},
+    {"id": "chunking", "title": "设计文档切分策略", "path": "materials/03-设计文档切分策略.md"},
+    {"id": "retrieval-index", "title": "建立检索索引", "path": "materials/04-建立检索索引.md"},
+    {"id": "retrieval-optimization", "title": "优化召回结果", "path": "materials/05-优化召回结果.md"},
+    {"id": "grounded-generation", "title": "生成有依据的答案", "path": "materials/06-生成有依据的答案.md"},
+    {"id": "rag-evaluation", "title": "建立 RAG 评测体系", "path": "materials/07-建立RAG评测体系.md"},
+    {"id": "capstone", "title": "综合项目", "path": "materials/08-综合项目.md"}
+  ]
+}

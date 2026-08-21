@@ -1,9 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState } from 'react';
+import type { ReactNode } from 'react';
 import { zh, en } from '../locales/translations';
 
 type Language = 'zh' | 'en';
-type Translations = typeof zh;
-
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -17,11 +16,11 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
   const t = (key: string, params?: Record<string, string>): string => {
     const keys = key.split('.');
-    let value: any = language === 'zh' ? zh : en;
+    let value: unknown = language === 'zh' ? zh : en;
     
     for (const k of keys) {
-      if (value && typeof value === 'object' && k in value) {
-        value = value[k];
+      if (value !== null && typeof value === 'object' && k in value) {
+        value = (value as Record<string, unknown>)[k];
       } else {
         return key; // Fallback to key if not found
       }
@@ -45,6 +44,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+// Context providers conventionally colocate their hook; only the provider is mounted by React.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
   if (!context) {

@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "course_id": "agent-design",
+  "course_version": "1.0",
+  "source_hashes": {
+    "materials/智能体设计与应用开发基础.md": "83cece69600ad9146e6e44ea38557ccafca63135ed98e8ea83be52e0faa7fc7c"
+  },
+  "artifact_hashes": {
+    "chunks.jsonl": "67b30f0790ae7e25988a8be0766b88a424d709307ea185d7af048b922173871b",
+    "bm25.json": "d2c807134cc8a4e632e7eb1aa493e9734d96c7f84dc4cae3aa67095f2fa51977"
+  },
+  "chunking": {
+    "target_chars": 700,
+    "max_chars": 900,
+    "overlap_chars": 120
+  },
+  "chunk_count": 546,
+  "section_count": 290,
+  "embedding": null,
+  "built_at": "2026-08-20T15:59:12.224244+00:00"
+}

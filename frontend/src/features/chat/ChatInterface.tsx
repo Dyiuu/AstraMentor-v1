@@ -2,17 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import type { ChatMessage } from '../../types';
+import type { ChatMessage, ChatOptions } from '../../types';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Send, BookOpen, X, Paperclip, Globe, ExternalLink } from 'lucide-react';
+import { Send, BookOpen, X, Paperclip, Globe, ExternalLink, BrainCircuit } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { MarkdownContent } from '../../components/MarkdownContent';
+import { CourseCitationCard } from '../../components/CourseCitationCard';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -32,6 +27,8 @@ interface ChatInterfaceProps {
   onReteachFromErrors?: () => void;
   // NOTE: 步骤进度信息
   stepProgress?: { current: number; total: number } | null;
+  chatOptions: ChatOptions;
+  onChatOptionsChange: (options: ChatOptions) => void;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
@@ -48,6 +45,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onNextStep,
     onReteachFromErrors,
     stepProgress,
+    chatOptions,
+    onChatOptionsChange,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
@@ -146,39 +145,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   }`}
                 >
                   <div className="prose prose-sm dark:prose-invert max-w-none break-words ai-content">
-                    <ReactMarkdown 
-                        remarkPlugins={[remarkGfm, remarkMath]}
-                        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
-                        components={{
-                            ul: ({node, ...props}) => <ul className="list-disc pl-8 my-2 space-y-1" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal pl-8 my-2 space-y-1" {...props} />,
-                            h1: ({node, ...props}) => <h1 className="text-xl font-bold my-2" {...props} />,
-                            h2: ({node, ...props}) => <h2 className="text-lg font-bold my-2" {...props} />,
-                            h3: ({node, ...props}) => <h3 className="text-base font-bold my-1" {...props} />,
-                            a: ({node, ...props}) => <a className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />,
-                            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary/30 pl-4 italic my-2 text-muted-foreground" {...props} />,
-                            p: ({node, ...props}) => <p className="leading-relaxed mb-2 last:mb-0" {...props} />,
-                            code: ({node, inline, className, children, ...props}: any) => {
-                                const match = /language-(\w+)/.exec(className || '');
-                                return !inline && match ? (
-                                    <SyntaxHighlighter
-                                        {...props}
-                                        style={vscDarkPlus}
-                                        language={match[1]}
-                                        PreTag="div"
-                                    >
-                                        {String(children).replace(/\n$/, '')}
-                                    </SyntaxHighlighter>
-                                ) : (
-                                    <code className={`${className} bg-muted px-1.5 py-0.5 rounded text-sm font-mono`} {...props}>
-                                        {children}
-                                    </code>
-                                );
-                            },
-                        }}
-                    >
-                        {msg.content}
-                    </ReactMarkdown>
+                    <MarkdownContent content={msg.content} />
+                    {msg.isStreaming && <span className="stream-cursor" aria-label="正在生成" />}
+                    {msg.reasoning && (
+                      <details className="reasoning-panel">
+                        <summary><BrainCircuit className="w-3.5 h-3.5" /> 思考过程</summary>
+                        <div>{msg.reasoning}</div>
+                      </details>
+                    )}
                     {msg.image && (
                       <div className="mt-2">
                         <img 
@@ -186,6 +160,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           alt="Sent image" 
                           className="max-w-full rounded-md border shadow-sm max-h-60 object-contain" 
                         />
+                      </div>
+                    )}
+                    {msg.role === 'assistant' && msg.knowledgeScope === 'extension' && (
+                      <div className="knowledge-scope knowledge-scope--extension">扩展知识 · 非教材原文</div>
+                    )}
+                    {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {msg.citations.map((citation) => (
+                          <CourseCitationCard key={citation.citation_id} citation={citation} compact />
+                        ))}
                       </div>
                     )}
                     {/* 搜索来源卡片 */}
@@ -303,7 +287,51 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           </div>
         )}
-        <form onSubmit={handleSubmit} className="flex w-full gap-2 items-center">
+        <div className="chat-controls" aria-label="自由问答生成设置">
+          <span>自由问答</span>
+          <label>
+            Max tokens
+            <select
+              value={[1024, 2048, 4096, 8192].includes(chatOptions.maxTokens) ? String(chatOptions.maxTokens) : 'custom'}
+              onChange={(event) => {
+                const value = event.target.value;
+                onChatOptionsChange({ ...chatOptions, maxTokens: value === 'custom' ? 4097 : Number(value) });
+              }}
+              disabled={isLoading}
+            >
+              <option value="1024">1024</option>
+              <option value="2048">2048</option>
+              <option value="4096">4096</option>
+              <option value="8192">8192</option>
+              <option value="custom">自定义</option>
+            </select>
+          </label>
+          {![1024, 2048, 4096, 8192].includes(chatOptions.maxTokens) && (
+            <input
+              type="number"
+              min={256}
+              max={32768}
+              step={256}
+              value={chatOptions.maxTokens}
+              onChange={(event) => onChatOptionsChange({
+                ...chatOptions,
+                maxTokens: Math.min(32768, Math.max(256, Number(event.target.value) || 256)),
+              })}
+              disabled={isLoading}
+              aria-label="自定义最大 token 数"
+            />
+          )}
+          <label className="thinking-toggle">
+            <input
+              type="checkbox"
+              checked={chatOptions.thinking}
+              onChange={(event) => onChatOptionsChange({ ...chatOptions, thinking: event.target.checked })}
+              disabled={isLoading}
+            />
+            <BrainCircuit className="w-3.5 h-3.5" /> Thinking
+          </label>
+        </div>
+        <form onSubmit={handleSubmit} className="flex w-full gap-2 items-center min-w-0">
              <input
                 type="file"
                 ref={fileInputRef}

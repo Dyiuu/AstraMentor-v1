@@ -35,3 +35,6 @@ ddgs>=9.0.0
 # PDF 解析
 PyMuPDF>=1.24.0
 
+# 课程知识库（course.yaml 与中文 BM25 分词）
+PyYAML>=6.0.0
+jieba>=0.42.1
